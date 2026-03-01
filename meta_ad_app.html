@@ -1146,6 +1146,23 @@ async function fetchPageContacts(token, pageId) {
   }
 }
 
+// ── Проверяет счётчик последовательных ошибок и приостанавливает сбор при 3 подряд ──
+function checkConsecutiveErrors(reason) {
+  window._consecutiveErrors = (window._consecutiveErrors || 0) + 1;
+  if (window._consecutiveErrors >= 3) {
+    _isPaused = true;
+    window._consecutiveErrors = 0;
+    const btn = document.getElementById('btnPause');
+    btn.textContent = '▶ Продолжить';
+    btn.style.background = 'rgba(34,197,94,.15)';
+    btn.style.borderColor = 'rgba(34,197,94,.4)';
+    btn.style.color = '#4ade80';
+    log(`⛔ 3 ошибки подряд (${reason}) — сбор приостановлен. Нажми «Продолжить» когда будешь готов.`, 'error');
+    return true; // caller should wait for unpause
+  }
+  return false;
+}
+
 async function runCollection(isResume = false) {
   const token = document.getElementById('token').value.trim();
   if (!token) { alert('Введите Access Token!'); return; }
@@ -1195,6 +1212,7 @@ async function runCollection(isResume = false) {
   if (!isResume) { allAds = []; resumeSeen = {}; }
   totalRaw=0; pagesCollected=0;
   _isPaused = false; _isStopped = false;
+  window._consecutiveErrors = 0;
   initLiveFeed();
   window._rateLimitRetries = 0;
 
@@ -1221,11 +1239,12 @@ async function runCollection(isResume = false) {
         await new Promise(r=>setTimeout(r,30000));
         try { data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor); }
         catch(e2) {
-          log('Сеть недоступна. Прогресс сохранён — нажмите "Продолжить" когда появится интернет.','error');
+          checkConsecutiveErrors('сеть');
+          log('Сеть недоступна. Прогресс сохранён.','error');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          checkResumeState();
-          document.getElementById('btnRun').disabled = false;
-          return;
+          while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
+          if (_isStopped) { checkResumeState(); document.getElementById('btnRun').disabled = false; return; }
+          continue;
         }
       }
 
@@ -1246,8 +1265,14 @@ async function runCollection(isResume = false) {
           document.getElementById('tokenHintBox').classList.add('visible');
           document.getElementById('tokenMeta').className = 'token-meta warn';
           document.getElementById('tokenMeta').textContent = '⚠ Токен истёк или недействителен';
-          log('⚠ Токен истёк. Прогресс сохранён — обновите токен и нажмите "Продолжить".', 'warn');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          if (checkConsecutiveErrors('токен')) {
+            log('⚠ Токен истёк. Обнови токен и нажми «Продолжить».', 'warn');
+            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
+            if (_isStopped) break;
+            continue;
+          }
+          log('⚠ Токен истёк. Прогресс сохранён — обновите токен и нажмите «Продолжить».', 'warn');
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
           return;
@@ -1255,8 +1280,14 @@ async function runCollection(isResume = false) {
           document.getElementById('tokenHintBox').classList.add('visible');
           document.getElementById('tokenMeta').className = 'token-meta warn';
           document.getElementById('tokenMeta').textContent = '⚠ Нет разрешения ads_read';
-          log('⚠ Нет разрешения ads_read — пересоздайте токен.', 'warn');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          if (checkConsecutiveErrors('права')) {
+            log('⚠ Нет прав ads_read. Пересоздай токен и нажми «Продолжить».', 'warn');
+            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
+            if (_isStopped) break;
+            continue;
+          }
+          log('⚠ Нет разрешения ads_read — пересоздайте токен.', 'warn');
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
           return;
@@ -1264,18 +1295,32 @@ async function runCollection(isResume = false) {
           const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
           window._rateLimitRetries = (window._rateLimitRetries || 0) + 1;
           const actualPause = Math.min(pauseSec * window._rateLimitRetries, 1200);
-          log(`⏳ Rate limit (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          if (checkConsecutiveErrors('rate limit')) {
+            log(`⛔ Rate limit 3 раза подряд — сбор приостановлен. Нажми «Продолжить» когда будешь готов.`, 'error');
+            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
+            if (_isStopped) break;
+            window._rateLimitRetries = 0;
+            continue;
+          }
+          log(`⏳ Rate limit (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
           for (let sec = actualPause; sec > 0; sec--) {
             await new Promise(r => setTimeout(r, 1000));
             if (sec % 30 === 0 || sec <= 10) log(`⏳ Продолжение через ${sec} сек...`, 'warn');
+            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
+            if (_isStopped) break;
           }
+          if (_isStopped) break;
           log('▶ Продолжаем...', 'info');
           continue;
         } else {
           log('⚠ Неизвестная ошибка API: ' + msg, 'error');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          checkResumeState();
+          if (checkConsecutiveErrors('API ' + code)) {
+            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
+            if (_isStopped) break;
+            continue;
+          }
           break;
         }
       }
@@ -1318,6 +1363,7 @@ async function runCollection(isResume = false) {
       allAds = allAds.concat(ads);
       addLiveRows(ads);
       window._rateLimitRetries = 0;
+      window._consecutiveErrors = 0;
       setProgress(Math.min(maxAds?(allAds.length/maxAds)*80:pageNum*8, 80));
 
       if (maxAds && allAds.length >= maxAds) {
