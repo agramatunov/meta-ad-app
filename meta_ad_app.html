@@ -737,13 +737,14 @@ function initLiveFeed() {
   document.getElementById('liveFeed').classList.add('active');
 }
 
-const LIVE_MAX_ROWS = 150;
+const LIVE_MAX_ROWS = 150; // max rows shown in live table
 
 function addLiveRows(ads) {
   const tbody = document.getElementById('liveTbody');
   liveRowCount += ads.length;
   document.getElementById('liveCount').textContent = liveRowCount + ' объявлений';
 
+  // Only render last batch, remove oldest rows if over limit
   const frag = document.createDocumentFragment();
   for (const ad of ads) {
     const bodies = ad.ad_creative_bodies||[];
@@ -765,10 +766,12 @@ function addLiveRows(ads) {
   }
   tbody.appendChild(frag);
 
+  // Remove old rows if too many
   while (tbody.rows.length > LIVE_MAX_ROWS) {
     tbody.deleteRow(0);
   }
 
+  // auto-scroll to bottom
   const wrap = tbody.closest('.live-table-wrap');
   wrap.scrollTop = wrap.scrollHeight;
 }
@@ -813,8 +816,10 @@ function updateCriteria() {
 function extractContacts(ad, text) {
   const contacts = { fb_page: '', instagram: '', telegram: '', website: '' };
 
+  // Facebook page link from page_id
   if (ad.page_id) contacts.fb_page = 'https://www.facebook.com/' + ad.page_id;
 
+  // Collect all text sources including CTA URLs
   const allText = [
     text,
     ...(ad.ad_creative_link_captions || []),
@@ -824,6 +829,7 @@ function extractContacts(ad, text) {
     ...(ad.ad_creative_link_button_types || []),
   ].join(' ');
 
+  // Instagram — explicit domain OR @mention (@ always = instagram)
   const igExplicit = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
   const igAt = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,30})/);
   if (igExplicit) {
@@ -832,6 +838,7 @@ function extractContacts(ad, text) {
     contacts.instagram = 'https://instagram.com/' + igAt[1];
   }
 
+  // Also check CTA URLs directly for instagram.com
   if (!contacts.instagram && ad.ad_creative_link_urls) {
     for (const url of ad.ad_creative_link_urls) {
       const m = url.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
@@ -839,10 +846,12 @@ function extractContacts(ad, text) {
     }
   }
 
+  // Telegram — only explicit t.me / telegram.me links (NOT bare @)
   const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
   if (tgMatch) {
     contacts.telegram = 'https://t.me/' + tgMatch[1];
   }
+  // Also check CTA URLs for t.me
   if (!contacts.telegram && ad.ad_creative_link_urls) {
     for (const url of ad.ad_creative_link_urls) {
       const m = url.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
@@ -850,6 +859,7 @@ function extractContacts(ad, text) {
     }
   }
 
+  // Website — check CTA URLs first (most reliable), then text
   const badDomains = /^https?:\/\/(?:www\.)?(facebook|instagram|meta|fb\.com|t\.me|telegram\.me)/i;
   if (ad.ad_creative_link_urls) {
     for (const url of ad.ad_creative_link_urls) {
@@ -909,6 +919,7 @@ async function fetchPage(token,term,country,status,media,platform,dateFrom,dateT
   return r.json();
 }
 
+// ---- Fetch contacts from Facebook page via Graph API ----
 async function fetchPageContacts(token, pageId) {
   try {
     const p = new URLSearchParams({
@@ -995,7 +1006,13 @@ async function runCollection() {
           document.getElementById('tokenMeta').textContent = '⚠ Нет разрешения ads_read';
           log('⚠ Токен не имеет разрешения ads_read — пересоздайте с нужным разрешением', 'warn');
         } else if (isRateLimit) {
-          log('⚠ Rate limit Meta — подождите 1 минуту и попробуйте снова. Собранные данные сохранены.', 'warn');
+          log('⏳ Rate limit Meta — автопауза 60 сек, затем продолжение...', 'warn');
+          for (let sec = 60; sec > 0; sec--) {
+            await new Promise(r => setTimeout(r, 1000));
+            if (sec % 10 === 0) log(`⏳ Ждём ${sec} сек...`, 'warn');
+          }
+          log('▶ Продолжаем сбор после паузы...', 'info');
+          continue; // retry same page
         } else {
           log('⚠ Ошибка API: ' + msg, 'error');
         }
@@ -1017,7 +1034,7 @@ async function runCollection() {
       const nc = data.paging?.cursors?.after;
       if (!nc||!ads.length) break;
       cursor=nc;
-      await new Promise(r=>setTimeout(r,100));
+      await new Promise(r=>setTimeout(r,400));
     }
     log(`  Найдено: ${allAds.length}`,'success');
   }
@@ -1031,6 +1048,7 @@ async function runCollection() {
     const bodies = ad.ad_creative_bodies||[];
     const titles = ad.ad_creative_link_titles||[];
     const text = [...bodies,...titles].join(' ');
+    // If language filter is on and text is empty — skip (can't verify language)
     if (lang && !text.trim()) continue;
     if (!matchesLanguage(text,lang)) continue;
     const pid = ad.page_id||ad.id;
@@ -1055,6 +1073,7 @@ async function runCollection() {
   collectedData = Object.values(seen);
   setProgress(100);
 
+  // ---- Second pass: enrich with Facebook page contacts ----
   if (collectedData.length > 0) {
     log(`🔍 Второй проход: обогащение контактами из Facebook-страниц (${collectedData.length} страниц)...`, 'info');
     setProgress(92);
@@ -1102,6 +1121,7 @@ async function runCollection() {
   ].filter(Boolean);
   document.getElementById('summaryRow').innerHTML = tags.map(t=>`<span class="summary-tag">${t}</span>`).join('');
 
+  // Sort by contact priority: Instagram > Telegram > Website > Facebook > rest
   collectedData.sort((a, b) => {
     const priority = r => {
       if (r.instagram) return 0;
@@ -1170,8 +1190,8 @@ function downloadExcel() {
 
   XLSX.writeFile(wb,`ads_${cntry.value}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
-
 // ====== GOOGLE SHEETS INTEGRATION ======
+
 const GS_TOKEN_KEY = 'gs_access_token';
 const GS_SETTINGS_KEY = 'gs_settings';
 let gsAccessToken = null;
@@ -1222,6 +1242,7 @@ function gsLogout() {
 }
 
 function checkGsToken() {
+  // Check URL hash for token (after OAuth redirect)
   const hash = window.location.hash;
   if (hash && hash.includes('access_token')) {
     const params = new URLSearchParams(hash.substring(1));
@@ -1237,6 +1258,7 @@ function checkGsToken() {
       return;
     }
   }
+  // Check saved token
   const saved = localStorage.getItem(GS_TOKEN_KEY);
   if (saved) {
     gsAccessToken = saved;
@@ -1273,6 +1295,7 @@ async function pushToSheets() {
   resultEl.className = 'push-result';
 
   try {
+    // 1. Read existing sheet to get all Instagram usernames and last row
     const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A:J`;
     const readRes = await fetch(readUrl, {
       headers: { Authorization: 'Bearer ' + gsAccessToken }
@@ -1285,6 +1308,7 @@ async function pushToSheets() {
     const existingRows = readData.values || [];
     const lastRow = existingRows.length;
 
+    // Collect existing Instagram usernames (col F = index 5) and Telegram (col A = index 0)
     const existingIg = new Set();
     const existingTg = new Set();
     const existingSites = new Set();
@@ -1299,13 +1323,19 @@ async function pushToSheets() {
       if (siteUrl) existingSites.add(siteUrl.trim().toLowerCase());
     }
 
+    // 2. Filter new rows — skip if Instagram already exists
     const newRows = [];
     for (const row of collectedData) {
       const igUser = extractIgUsername(row.instagram);
       const tgUser = extractTgUsername(row.telegram);
+
+      // Skip if Instagram already in table (primary dedup key)
       if (igUser && existingIg.has(igUser)) continue;
+      // Skip if no contacts at all
       if (!row.instagram && !row.telegram && !row.website) continue;
+
       newRows.push(row);
+      // Add to sets so duplicates within new batch are also caught
       if (igUser) existingIg.add(igUser);
       if (tgUser) existingTg.add(tgUser);
     }
@@ -1320,24 +1350,27 @@ async function pushToSheets() {
 
     btn.textContent = `⏳ Добавляем ${newRows.length} строк...`;
 
+    // 3. Build rows to append: empty row separator + new data rows
+    // Columns: A=Telegram, B=Цена, C=Раздел, D=Себе, E=Название, F=Instagram, G=, H=, I=Источник, J=Сайт
     const toAppend = [
-      Array(10).fill(''),
+      Array(10).fill(''), // empty separator row
     ];
     for (const row of newRows) {
       toAppend.push([
-        row.telegram  || '',
-        '',
-        '',
-        '',
-        row.page_name || '',
-        row.instagram || '',
-        '',
-        '',
-        '',
-        row.website   || '',
+        row.telegram  || '',  // A - Telegram
+        '',                    // B - Цена (пусто)
+        '',                    // C - Раздел (пусто)
+        '',                    // D - Себе (пусто)
+        row.page_name || '',  // E - Название
+        row.instagram || '',  // F - Instagram
+        '',                    // G - Отказали/Сотрудничаем
+        '',                    // H - Связывались
+        '',                    // I - Источник (пусто)
+        row.website   || '',  // J - Сайт
       ]);
     }
 
+    // 4. Append values
     const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A${lastRow + 1}:J${lastRow + toAppend.length}?valueInputOption=USER_ENTERED`;
     const appendRes = await fetch(appendUrl, {
       method: 'PUT',
@@ -1352,11 +1385,13 @@ async function pushToSheets() {
       throw new Error(err.error?.message || 'Ошибка записи');
     }
 
-    const dataStartRow = lastRow + 2;
+    // 5. Apply green fill #b7e1cd to new data rows (skip the empty separator row)
+    const dataStartRow = lastRow + 2; // +1 for separator, +1 for 1-based index
     const dataEndRow   = lastRow + toAppend.length;
 
     const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`;
 
+    // Get sheet GID first
     const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`, {
       headers: { Authorization: 'Bearer ' + gsAccessToken }
     });
@@ -1382,7 +1417,7 @@ async function pushToSheets() {
             },
             cell: {
               userEnteredFormat: {
-                backgroundColor: { red: 0.718, green: 0.882, blue: 0.804 },
+                backgroundColor: { red: 0.718, green: 0.882, blue: 0.804 }, // #b7e1cd
               }
             },
             fields: 'userEnteredFormat.backgroundColor',
@@ -1409,6 +1444,7 @@ async function pushToSheets() {
 }
 
 // ====== LONG-LIVED TOKEN ======
+
 const LLT_SETTINGS_KEY = 'llt_settings';
 
 function saveLltSettings() {
@@ -1429,6 +1465,18 @@ function loadLltSettings() {
 function toggleVisEl(id) {
   const el = document.getElementById(id);
   el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function parseTokenExpiry(token) {
+  // JWT tokens have expiry in payload
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]));
+      if (payload.exp) return new Date(payload.exp * 1000);
+    }
+  } catch(e) {}
+  return null;
 }
 
 async function checkTokenExpiry(token) {
@@ -1492,6 +1540,7 @@ async function getLongLivedToken() {
     }
 
     if (data.access_token) {
+      // Save and apply the new long-lived token
       document.getElementById('token').value = data.access_token;
       localStorage.setItem('meta_ad_token', data.access_token);
       document.getElementById('tokenSaved').classList.add('visible');
@@ -1513,12 +1562,13 @@ async function getLongLivedToken() {
   }
 }
 
-// ====== INIT ======
+// ====== INIT (runs after all functions are defined) ======
 loadSettings();
 loadGsSettings();
 loadLltSettings();
 checkGsToken();
 
+// Load saved token
 (function() {
   const saved = localStorage.getItem('meta_ad_token');
   if (saved) {
@@ -1529,6 +1579,7 @@ checkGsToken();
     checkTokenExpiry(saved);
   }
 })();
+
 </script>
 </body>
 </html>
