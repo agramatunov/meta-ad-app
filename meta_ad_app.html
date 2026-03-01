@@ -335,6 +335,26 @@ tr:hover td { background:rgba(79,110,247,.04); }
 .push-result.error { border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.07); color: var(--red); }
 .token-hint-box a { color:#f87171; font-weight:600; }
 .token-hint-box strong { color:#fcd34d; }
+.btn-edit-row {
+  background: none; border: 1px solid rgba(79,110,247,.2);
+  color: var(--muted); font-size: 11px; padding: 2px 7px;
+  border-radius: 5px; cursor: pointer; transition: all .2s;
+  font-family: 'DM Mono', monospace;
+}
+.btn-edit-row:hover { border-color: var(--accent); color: #818cf8; }
+.inline-edit {
+  display: flex; gap: 4px; align-items: center;
+}
+.inline-edit input {
+  width: 130px; background: var(--surface2); border: 1px solid var(--accent);
+  color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px;
+  padding: 3px 7px; border-radius: 6px; outline: none;
+}
+.btn-save-edit {
+  background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3);
+  color: var(--green); font-size: 11px; padding: 3px 8px;
+  border-radius: 5px; cursor: pointer; font-family: 'DM Mono', monospace;
+}
 .token-meta {
   font-family:'DM Mono',monospace; font-size:11px; color:var(--muted);
   margin-top:5px; min-height:16px;
@@ -640,7 +660,7 @@ tr:hover td { background:rgba(79,110,247,.04); }
       <thead>
         <tr>
           <th>#</th><th>Название страницы</th><th>Платформы</th>
-          <th>Дата начала</th><th>Объявлений</th><th>Instagram</th><th>Telegram</th><th>Сайт</th><th>Facebook</th><th>Объявление</th>
+          <th>Дата начала</th><th>Объявлений</th><th>Instagram</th><th>Telegram</th><th>Сайт</th><th>Facebook</th><th>Объявление</th><th>Ред.</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
@@ -890,9 +910,13 @@ function extractContacts(ad, text) {
 
   // Instagram — explicit domain OR @mention (@ always = instagram)
   const igExplicit = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
+  // Patterns like "instagram: username", "ig: username", "inst: username", "insta: username"
+  const igLabel = allText.match(/(?:instagram|insta|inst|ig)\s*[:\-—]\s*@?([a-zA-Z0-9_.]{2,30})/i);
   const igAt = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,30})/);
   if (igExplicit) {
     contacts.instagram = 'https://instagram.com/' + igExplicit[1];
+  } else if (igLabel) {
+    contacts.instagram = 'https://instagram.com/' + igLabel[1];
   } else if (igAt) {
     contacts.instagram = 'https://instagram.com/' + igAt[1];
   }
@@ -1403,17 +1427,61 @@ async function runCollection(isResume = false) {
       <td>${plats||'—'}</td>
       <td>${row.start_date||'—'}</td>
       <td><span class="count-badge">${row.ad_count}</span></td>
-      <td class="link-cell">${mkLink(row.instagram, '→ Instagram')}</td>
-      <td class="link-cell">${mkLink(row.telegram, '→ Telegram')}</td>
-      <td class="link-cell">${row.website ? mkLink(row.website, row.website.replace(/https?:\/\//,'').slice(0,25)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="link-cell" id="ig-cell-${i}">${mkLink(row.instagram, '→ Instagram')}</td>
+      <td class="link-cell" id="tg-cell-${i}">${mkLink(row.telegram, '→ Telegram')}</td>
+      <td class="link-cell" id="ws-cell-${i}">${row.website ? mkLink(row.website, row.website.replace(/https?:\/\//,'').slice(0,25)) : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="link-cell">${mkLink(row.fb_page, '→ Facebook')}</td>
-      <td class="link-cell">${mkLink(row.snapshot_url, '→ Открыть')}</td>`;
+      <td class="link-cell">${mkLink(row.snapshot_url, '→ Открыть')}</td>
+      <td><button type="button" class="btn-edit-row" onclick="editRow(${i})">✏️</button></td>`;
     tbody.appendChild(tr);
   });
 
   document.getElementById('results').classList.add('active');
   document.getElementById('btnRun').disabled=false;
   document.getElementById('btnPush').disabled = false;
+}
+
+function editRow(i) {
+  const row = collectedData[i];
+  const igCell = document.getElementById('ig-cell-' + i);
+  const tgCell = document.getElementById('tg-cell-' + i);
+  const wsCell = document.getElementById('ws-cell-' + i);
+  if (!igCell) return;
+
+  function makeInput(label, val, field, cell) {
+    const clean = val ? val.replace(/^https?:\/\/(?:www\.)?(?:instagram\.com\/|t\.me\/)?/, '') : '';
+    cell.innerHTML = `<div class="inline-edit">
+      <input type="text" placeholder="${label}" value="${clean}" id="edit-${field}-${i}">
+      <button type="button" class="btn-save-edit" onclick="saveEdit(${i})">✓</button>
+    </div>`;
+  }
+  makeInput('instagram username', row.instagram, 'ig', igCell);
+  makeInput('t.me/username', row.telegram, 'tg', tgCell);
+  makeInput('https://...', row.website, 'ws', wsCell);
+  document.getElementById('edit-ig-' + i)?.focus();
+}
+
+function saveEdit(i) {
+  const row = collectedData[i];
+  const igVal = document.getElementById('edit-ig-' + i)?.value.trim();
+  const tgVal = document.getElementById('edit-tg-' + i)?.value.trim();
+  const wsVal = document.getElementById('edit-ws-' + i)?.value.trim();
+
+  if (igVal !== undefined) {
+    row.instagram = igVal ? (igVal.startsWith('http') ? igVal : 'https://instagram.com/' + igVal) : '';
+  }
+  if (tgVal !== undefined) {
+    row.telegram = tgVal ? (tgVal.startsWith('http') ? tgVal : 'https://t.me/' + tgVal) : '';
+  }
+  if (wsVal !== undefined) {
+    row.website = wsVal ? (wsVal.startsWith('http') ? wsVal : 'https://' + wsVal) : '';
+  }
+
+  const mkLink = (url, label) => url ? `<a href="${url}" target="_blank" style="color:#818cf8;font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;">${label}</a>` : '<span style="color:var(--muted)">—</span>';
+  document.getElementById('ig-cell-' + i).innerHTML = mkLink(row.instagram, '→ Instagram');
+  document.getElementById('tg-cell-' + i).innerHTML = mkLink(row.telegram, '→ Telegram');
+  document.getElementById('ws-cell-' + i).innerHTML = row.website ? mkLink(row.website, row.website.replace(/https?:\/\//, '').slice(0, 25)) : '<span style="color:var(--muted)">—</span>';
+  showToast('✓ Сохранено');
 }
 
 function downloadExcel() {
@@ -1481,14 +1549,59 @@ function setGsStatus(msg, type='') {
 function gsLogin() {
   const clientId = document.getElementById('gClientId').value.trim();
   if (!clientId) { alert('Введите Google Client ID!'); return; }
+
+  const redirectUri = window.location.href.split('?')[0].split('#')[0];
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: window.location.href.split('?')[0].split('#')[0],
+    redirect_uri: redirectUri,
     response_type: 'token',
     scope: 'https://www.googleapis.com/auth/spreadsheets',
     prompt: 'select_account',
   });
-  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+
+  // Open popup instead of redirecting — keeps main page data intact
+  const w = 500, h = 600;
+  const left = Math.round(screen.width / 2 - w / 2);
+  const top  = Math.round(screen.height / 2 - h / 2);
+  const popup = window.open(
+    'https://accounts.google.com/o/oauth2/v2/auth?' + params,
+    'gs_oauth',
+    `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0`
+  );
+  if (!popup) {
+    // Fallback: popup blocked — use redirect
+    window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+    return;
+  }
+
+  // Poll popup until it redirects back with token in hash
+  const poll = setInterval(() => {
+    try {
+      if (!popup || popup.closed) { clearInterval(poll); return; }
+      const hash = popup.location.hash;
+      if (hash && hash.includes('access_token')) {
+        clearInterval(poll);
+        popup.close();
+        const p = new URLSearchParams(hash.substring(1));
+        const token = p.get('access_token');
+        const expiresIn = parseInt(p.get('expires_in') || '3600');
+        if (token) {
+          gsAccessToken = token;
+          const expiresAt = Date.now() + expiresIn * 1000;
+          localStorage.setItem(GS_TOKEN_KEY, token);
+          localStorage.setItem(GS_TOKEN_KEY + '_exp', expiresAt);
+          const minsLeft = Math.round(expiresIn / 60);
+          setGsStatus(`✓ Подключено (осталось ~${minsLeft} мин)`, 'connected');
+          document.getElementById('btnGsLogin').style.display = 'none';
+          document.getElementById('btnGsLogout').style.display = '';
+          showToast('✅ Google Sheets подключён — данные сбора сохранены!');
+          startGsTokenWatcher();
+        }
+      }
+    } catch(e) {
+      // Cross-origin — popup is on Google page, keep polling
+    }
+  }, 300);
 }
 
 function gsLogout() {
@@ -1510,34 +1623,14 @@ function gsHandleAuthError() {
 }
 
 function checkGsToken() {
-  // Check URL hash for token (after OAuth redirect)
-  const hash = window.location.hash;
-  if (hash && hash.includes('access_token')) {
-    const params = new URLSearchParams(hash.substring(1));
-    const token = params.get('access_token');
-    const expiresIn = parseInt(params.get('expires_in') || '3600');
-    if (token) {
-      gsAccessToken = token;
-      const expiresAt = Date.now() + expiresIn * 1000;
-      localStorage.setItem(GS_TOKEN_KEY, token);
-      localStorage.setItem(GS_TOKEN_KEY + '_exp', expiresAt);
-      window.history.replaceState(null, '', window.location.pathname);
-      setGsStatus('✓ Подключено к Google', 'connected');
-      document.getElementById('btnGsLogin').style.display = 'none';
-      document.getElementById('btnGsLogout').style.display = '';
-      showToast('Google Sheets подключён!');
-      return;
-    }
-  }
   // Check saved token — verify it hasn't expired
   const saved = localStorage.getItem(GS_TOKEN_KEY);
   const exp   = parseInt(localStorage.getItem(GS_TOKEN_KEY + '_exp') || '0');
   if (saved) {
     if (exp && Date.now() > exp - 60000) {
-      // Token expired — clear it
       localStorage.removeItem(GS_TOKEN_KEY);
       localStorage.removeItem(GS_TOKEN_KEY + '_exp');
-      setGsStatus('⚠ Токен истёк — войдите снова', 'error');
+      setGsStatus('⚠ Токен истёк — нажмите «Войти через Google»', 'error');
       return;
     }
     gsAccessToken = saved;
@@ -1846,11 +1939,33 @@ async function getLongLivedToken() {
   }
 }
 
+// ====== AUTO REFRESH TIMER — предупреждает за 5 мин до истечения токена Google ======
+function startGsTokenWatcher() {
+  clearInterval(window._gsTokenWatcher);
+  window._gsTokenWatcher = setInterval(() => {
+    const exp = parseInt(localStorage.getItem(GS_TOKEN_KEY + '_exp') || '0');
+    if (!exp || !gsAccessToken) return;
+    const msLeft = exp - Date.now();
+    if (msLeft <= 0) {
+      gsHandleAuthError();
+      clearInterval(window._gsTokenWatcher);
+    } else if (msLeft <= 5 * 60 * 1000) {
+      // Less than 5 min left — show warning in status
+      const minsLeft = Math.round(msLeft / 60000);
+      setGsStatus(`⚠ Токен истекает через ~${minsLeft} мин — обновите`, 'error');
+    } else {
+      const minsLeft = Math.round(msLeft / 60000);
+      setGsStatus(`✓ Подключено (осталось ~${minsLeft} мин)`, 'connected');
+    }
+  }, 30000); // check every 30 sec
+}
+
 // ====== INIT (runs after all functions are defined) ======
 loadSettings();
 loadGsSettings();
 loadLltSettings();
 checkGsToken();
+startGsTokenWatcher();
 checkResumeState();
 
 // Load saved token
