@@ -517,9 +517,10 @@ tr:hover td { background:rgba(79,110,247,.04); }
       <label>Скорость запросов <span class="label-hint">(медленнее = меньше ошибок)</span></label>
       <select id="reqDelay" onchange="saveSettings();">
         <option value="800">Быстро (800мс) — риск rate limit</option>
-        <option value="2000" selected>Нормально (2 сек)</option>
-        <option value="4000">Медленно (4 сек) — стабильно</option>
-        <option value="8000">Очень медленно (8 сек) — максимум</option>
+        <option value="2000">Нормально (2 сек)</option>
+        <option value="4000">Медленно (4 сек)</option>
+        <option value="8000">Очень медленно (8 сек)</option>
+        <option value="20000" selected>Супер медленно (20 сек) — максимум</option>
       </select>
     </div>
     <div class="field" style="margin:0">
@@ -1044,17 +1045,16 @@ async function runCollection() {
           document.getElementById('tokenMeta').textContent = '⚠ Нет разрешения ads_read';
           log('⚠ Токен не имеет разрешения ads_read — пересоздайте с нужным разрешением', 'warn');
         } else if (isRateLimit) {
-          const pauseSec = parseInt(document.getElementById('rateLimitPause').value) || 300;
-          let retryCount = (window._rateLimitRetries = (window._rateLimitRetries || 0) + 1);
-          // Exponential backoff: each subsequent rate limit doubles the wait (max 20min)
-          const actualPause = Math.min(pauseSec * retryCount, 1200);
-          log(`⏳ Rate limit Meta (#${retryCount}) — пауза ${actualPause} сек...`, 'warn');
+          const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
+          window._rateLimitRetries = (window._rateLimitRetries || 0) + 1;
+          const actualPause = Math.min(pauseSec * window._rateLimitRetries, 1200);
+          log(`⏳ Rate limit Meta (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
           for (let sec = actualPause; sec > 0; sec--) {
             await new Promise(r => setTimeout(r, 1000));
             if (sec % 30 === 0 || sec <= 10) log(`⏳ Продолжение через ${sec} сек...`, 'warn');
           }
           log('▶ Продолжаем сбор после паузы...', 'info');
-          continue; // retry same page
+          continue;
         } else {
           log('⚠ Ошибка API: ' + msg, 'error');
         }
@@ -1071,13 +1071,14 @@ async function runCollection() {
       }
       allAds = allAds.concat(ads);
       addLiveRows(ads);
-      window._rateLimitRetries = 0; // reset backoff counter on success
+      window._rateLimitRetries = 0;
       setProgress(Math.min(maxAds?(allAds.length/maxAds)*80:pageNum*8, 80));
       if (maxAds && allAds.length>=maxAds) { allAds=allAds.slice(0,maxAds); log('Лимит достигнут','warn'); break; }
       const nc = data.paging?.cursors?.after;
       if (!nc||!ads.length) break;
       cursor=nc;
       const delay = parseInt(document.getElementById('reqDelay')?.value) || 2000;
+      log(`  ⏱ Пауза ${delay/1000} сек...`);
       await new Promise(r=>setTimeout(r,delay));
     }
     log(`  Найдено: ${allAds.length}`,'success');
