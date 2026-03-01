@@ -813,70 +813,150 @@ function updateCriteria() {
   document.getElementById('criteriaContent').innerHTML = items.join(' ');
 }
 
+function cleanUrl(url) {
+  // Remove tracking params and clean up URL
+  try {
+    const u = new URL(url);
+    // Remove common tracking params
+    ['utm_source','utm_medium','utm_campaign','utm_content','utm_term',
+     'fbclid','gclid','ref','source','_ga'].forEach(p => u.searchParams.delete(p));
+    return u.href.replace(/\/$/, '');
+  } catch(e) { return url.replace(/[.,;)>\]]+$/, ''); }
+}
+
 function extractContacts(ad, text) {
   const contacts = { fb_page: '', instagram: '', telegram: '', website: '' };
 
   // Facebook page link from page_id
   if (ad.page_id) contacts.fb_page = 'https://www.facebook.com/' + ad.page_id;
 
-  // Collect all text sources including CTA URLs
-  const allText = [
+  // Collect ALL text sources
+  const textParts = [
     text,
+    ...(ad.ad_creative_bodies || []),
     ...(ad.ad_creative_link_captions || []),
     ...(ad.ad_creative_link_descriptions || []),
     ...(ad.ad_creative_link_titles || []),
     ...(ad.ad_creative_link_urls || []),
-    ...(ad.ad_creative_link_button_types || []),
-  ].join(' ');
+  ];
+  const allText = textParts.join(' ');
 
-  // Instagram — explicit domain OR @mention (@ always = instagram)
-  const igExplicit = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
-  const igAt = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,30})/);
-  if (igExplicit) {
-    contacts.instagram = 'https://instagram.com/' + igExplicit[1];
-  } else if (igAt) {
-    contacts.instagram = 'https://instagram.com/' + igAt[1];
+  // === INSTAGRAM ===
+  // Priority 1: explicit instagram.com/username in URLs or text
+  const igDomain = allText.match(/(?:https?:\/\/)?(?:www\.)?instagram\.com\/([a-zA-Z0-9_.]{2,30})(?:[/?#]|$|\s)/i);
+  if (igDomain) {
+    const username = igDomain[1].replace(/^(p\/|reel\/|stories\/|tv\/)/, '');
+    if (!['p','reel','stories','tv','explore','accounts','_u'].includes(username)) {
+      contacts.instagram = 'https://instagram.com/' + username;
+    }
   }
-
-  // Also check CTA URLs directly for instagram.com
+  // Priority 2: @mention in text body (Instagram handles)
+  if (!contacts.instagram) {
+    const atMention = text.match(/(?:^|[\s(,])@([a-zA-Z0-9_.]{3,30})(?=[\s,).\n]|$)/m);
+    if (atMention) contacts.instagram = 'https://instagram.com/' + atMention[1];
+  }
+  // Priority 3: CTA URL is instagram.com
   if (!contacts.instagram && ad.ad_creative_link_urls) {
     for (const url of ad.ad_creative_link_urls) {
       const m = url.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
-      if (m) { contacts.instagram = 'https://instagram.com/' + m[1]; break; }
+      if (m && !['p','reel','stories'].includes(m[1])) {
+        contacts.instagram = 'https://instagram.com/' + m[1]; break;
+      }
     }
   }
 
-  // Telegram — only explicit t.me / telegram.me links (NOT bare @)
-  const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
-  if (tgMatch) {
+  // === TELEGRAM ===
+  // t.me links in any field
+  const tgMatch = allText.match(/(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]{4,32})(?:[/?#]|\s|$)/i);
+  if (tgMatch && !['joinchat','+'].some(x => tgMatch[1].startsWith(x))) {
     contacts.telegram = 'https://t.me/' + tgMatch[1];
   }
-  // Also check CTA URLs for t.me
   if (!contacts.telegram && ad.ad_creative_link_urls) {
     for (const url of ad.ad_creative_link_urls) {
-      const m = url.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
+      const m = url.match(/(?:t\.me|telegram\.me)\/([a-zA-Z0-9_+]{4,32})/i);
       if (m) { contacts.telegram = 'https://t.me/' + m[1]; break; }
     }
   }
 
-  // Website — check CTA URLs first (most reliable), then text
-  const badDomains = /^https?:\/\/(?:www\.)?(facebook|instagram|meta|fb\.com|t\.me|telegram\.me)/i;
+  // === WEBSITE ===
+  const badDomains = /(?:facebook\.com|instagram\.com|meta\.com|fb\.com|t\.me|telegram\.me|l\.facebook\.com|lm\.facebook\.com|fb\.watch|youtube\.com|youtu\.be|tiktok\.com|twitter\.com|x\.com|linkedin\.com|google\.com|apple\.com|play\.google)/i;
+
+  // Priority 1: CTA link URL (most reliable — this is where the ad points)
   if (ad.ad_creative_link_urls) {
     for (const url of ad.ad_creative_link_urls) {
-      if (!badDomains.test(url)) {
-        contacts.website = url.replace(/[.,;)>]+$/, '');
-        break;
+      if (url && url.startsWith('http') && !badDomains.test(url)) {
+        contacts.website = cleanUrl(url); break;
       }
     }
   }
+  // Priority 2: link captions (often show domain like "mysite.com")
+  if (!contacts.website && ad.ad_creative_link_captions) {
+    for (const cap of ad.ad_creative_link_captions) {
+      if (cap && cap.match(/^[a-z0-9-]+\.[a-z]{2,}/i) && !badDomains.test(cap)) {
+        contacts.website = 'https://' + cap.replace(/^https?:\/\//, ''); break;
+      }
+    }
+  }
+  // Priority 3: URLs found in text body
   if (!contacts.website) {
-    const urlMatch = allText.match(/https?:\/\/(?!(?:www\.)?(facebook|instagram|meta|fb\.com|t\.me|telegram\.me))[^\s"'<>]{4,80}/gi);
-    if (urlMatch && urlMatch.length) {
-      contacts.website = urlMatch[0].replace(/[.,;)>]+$/, '');
+    const urlsInText = allText.match(/https?:\/\/[^\s"'<>()\[\]]{6,100}/gi) || [];
+    for (const url of urlsInText) {
+      const clean = url.replace(/[.,;)>\]]+$/, '');
+      if (!badDomains.test(clean)) { contacts.website = cleanUrl(clean); break; }
     }
   }
 
   return contacts;
+}
+
+// ---- Fetch contacts from Facebook page via Graph API ----
+// Uses only fields available without business verification
+async function fetchPageContacts(token, pageId) {
+  try {
+    // Request fields that are publicly available
+    const p = new URLSearchParams({
+      access_token: token,
+      fields: 'website,about,bio,emails,single_line_address,link',
+    });
+    const r = await fetch(`https://graph.facebook.com/v19.0/${pageId}?${p}`);
+    const data = await r.json();
+    if (data.error) return {};
+
+    const result = {};
+
+    // Combine all text fields for pattern matching
+    const allPageText = [
+      data.website || '',
+      data.about || '',
+      data.bio || '',
+      data.link || '',
+      ...(data.emails || []),
+    ].join(' ');
+
+    // Telegram from any field
+    const tgMatch = allPageText.match(/(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]{4,32})/i);
+    if (tgMatch) result.telegram = 'https://t.me/' + tgMatch[1];
+
+    // Instagram from about/bio text (@mention or instagram.com link)
+    const igDomain = allPageText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
+    const igAt = allPageText.match(/(?:^|[\s(])@([a-zA-Z0-9_.]{3,30})/m);
+    if (igDomain) result.instagram = 'https://instagram.com/' + igDomain[1];
+    else if (igAt) result.instagram = 'https://instagram.com/' + igAt[1];
+
+    // Website — prefer data.website, fallback to URLs in about
+    const badDomains = /(?:facebook\.com|instagram\.com|meta\.com|fb\.com|t\.me|telegram\.me)/i;
+    if (data.website && !badDomains.test(data.website)) {
+      result.website = cleanUrl(data.website);
+    } else {
+      const urlMatch = allPageText.match(/https?:\/\/[^\s"'<>()]{6,100}/gi) || [];
+      for (const url of urlMatch) {
+        const clean = url.replace(/[.,;)>\]]+$/, '');
+        if (!badDomains.test(clean)) { result.website = cleanUrl(clean); break; }
+      }
+    }
+
+    return result;
+  } catch(e) { return {}; }
 }
 
 function matchesLanguage(text, lang) {
@@ -1093,23 +1173,26 @@ async function runCollection() {
 
   // ---- Second pass: enrich with Facebook page contacts ----
   if (collectedData.length > 0) {
-    log(`🔍 Второй проход: обогащение контактами из Facebook-страниц (${collectedData.length} страниц)...`, 'info');
+    log(`🔍 Второй проход: обогащение из Facebook-страниц (${collectedData.length} страниц)...`, 'info');
     setProgress(92);
-    let enriched = 0;
-    const batchSize = 10;
+    let enrichedIg = 0, enrichedTg = 0, enrichedWeb = 0;
+    const batchSize = 5; // smaller batches to avoid rate limit
     for (let i = 0; i < collectedData.length; i += batchSize) {
       const batch = collectedData.slice(i, i + batchSize);
       await Promise.all(batch.map(async (row) => {
         if (!row.page_id) return;
         const extra = await fetchPageContacts(token, row.page_id);
-        if (extra.instagram && !row.instagram) { row.instagram = extra.instagram; enriched++; }
-        if (extra.telegram && !row.telegram) { row.telegram = extra.telegram; enriched++; }
-        if (extra.website && !row.website) { row.website = extra.website; enriched++; }
+        if (extra.instagram && !row.instagram) { row.instagram = extra.instagram; enrichedIg++; }
+        if (extra.telegram  && !row.telegram)  { row.telegram  = extra.telegram;  enrichedTg++; }
+        if (extra.website   && !row.website)   { row.website   = extra.website;   enrichedWeb++; }
       }));
+      if (i % 50 === 0 && i > 0) {
+        log(`  Обработано ${i}/${collectedData.length} страниц... (+${enrichedIg} ig, +${enrichedTg} tg, +${enrichedWeb} web)`, 'info');
+      }
       setProgress(92 + Math.round((i / collectedData.length) * 6));
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 300)); // slightly longer delay
     }
-    log(`✅ Обогащено контактов: +${enriched} из Facebook-страниц`, 'success');
+    log(`✅ Обогащение завершено: +${enrichedIg} Instagram, +${enrichedTg} Telegram, +${enrichedWeb} сайтов`, 'success');
   }
 
   if (!collectedData.length) {
