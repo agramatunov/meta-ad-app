@@ -1,1 +1,1813 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meta Ad Collector</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --surface2: #1c1c27;
+  --border: #2a2a3d;
+  --accent: #4f6ef7;
+  --accent2: #7c3aed;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --text: #e8e8f0;
+  --muted: #6b6b8a;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  min-height: 100vh;
+}
+body::before {
+  content:'';
+  position:fixed; inset:0;
+  background:
+    radial-gradient(ellipse 600px 400px at 20% 20%, rgba(79,110,247,0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 500px 300px at 80% 80%, rgba(124,58,237,0.05) 0%, transparent 70%);
+  pointer-events:none; z-index:0;
+}
+.container { max-width:960px; margin:0 auto; padding:52px 24px; position:relative; z-index:1; }
+.header { margin-bottom:48px; animation: fadeUp .5s ease both; }
+.badge {
+  display:inline-flex; align-items:center; gap:8px;
+  background:rgba(79,110,247,0.12); border:1px solid rgba(79,110,247,0.3);
+  color:#818cf8; font-family:'DM Mono',monospace; font-size:11px;
+  letter-spacing:.12em; text-transform:uppercase;
+  padding:6px 14px; border-radius:100px; margin-bottom:18px;
+}
+.badge::before {
+  content:''; width:6px; height:6px; background:#4f6ef7;
+  border-radius:50%; animation:pulse 2s infinite;
+}
+h1 {
+  font-size:clamp(32px,5vw,52px); font-weight:800; line-height:1.05;
+  letter-spacing:-.03em;
+  background:linear-gradient(135deg,#e8e8f0 0%,#818cf8 50%,#a78bfa 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  margin-bottom:12px;
+}
+.subtitle { color:var(--muted); font-size:15px; line-height:1.6; max-width:480px; }
+.card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:20px; padding:32px; margin-bottom:18px;
+  animation: fadeUp .5s ease both;
+}
+.card-title {
+  font-size:12px; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); font-family:'DM Mono',monospace; margin-bottom:24px;
+}
+.criteria-banner {
+  background:rgba(79,110,247,0.07); border:1px solid rgba(79,110,247,0.2);
+  border-radius:12px; padding:14px 18px; margin-bottom:24px;
+  font-size:12px; font-family:'DM Mono',monospace; color:#818cf8;
+  line-height:2.2; display:none;
+}
+.criteria-banner.visible { display:block; }
+.criteria-label { font-size:10px; color:var(--muted); margin-bottom:8px; letter-spacing:.1em; text-transform:uppercase; }
+.criteria-item {
+  display:inline-flex; align-items:center; gap:5px;
+  background:rgba(79,110,247,0.12); border:1px solid rgba(79,110,247,0.2);
+  padding:3px 11px; border-radius:100px; margin:2px 3px;
+  font-size:11px; color:#818cf8;
+}
+.criteria-item strong { color:var(--text); }
+.section-label {
+  font-size:11px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--muted); font-family:'DM Mono',monospace;
+  margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid var(--border);
+}
+.field { margin-bottom:18px; }
+label {
+  display:block; font-size:13px; font-weight:600; color:var(--text);
+  margin-bottom:7px; letter-spacing:.02em;
+}
+.label-hint { color:var(--muted); font-weight:400; font-size:11px; margin-left:6px; }
+input[type="text"], input[type="password"], input[type="date"], select {
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); font-family:'DM Mono',monospace; font-size:13px;
+  padding:11px 14px; border-radius:10px; outline:none;
+  transition:border-color .2s, box-shadow .2s;
+  -webkit-appearance:none; appearance:none;
+}
+input:focus, select:focus {
+  border-color:var(--accent); box-shadow:0 0 0 3px rgba(79,110,247,0.15);
+}
+select {
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='7' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6b8a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 14px center; padding-right:36px;
+}
+select option { background:var(--surface2); }
+input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.5); cursor:pointer; }
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+.token-wrap { position:relative; }
+.token-wrap input { padding-right:46px; }
+.toggle-vis {
+  position:absolute; right:13px; top:50%; transform:translateY(-50%);
+  background:none; border:none; color:var(--muted); cursor:pointer;
+  font-size:15px; padding:4px; transition:color .2s;
+}
+.toggle-vis:hover { color:var(--text); }
+.toggle-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:13px 0; border-bottom:1px solid var(--border);
+}
+.toggle-row:last-child { border-bottom:none; }
+.toggle-info h4 { font-size:14px; font-weight:600; margin-bottom:2px; }
+.toggle-info p { font-size:12px; color:var(--muted); }
+.toggle { position:relative; width:44px; height:24px; flex-shrink:0; }
+.toggle input { opacity:0; width:0; height:0; }
+.slider {
+  position:absolute; inset:0; background:var(--surface2);
+  border:1px solid var(--border); border-radius:100px; cursor:pointer; transition:.3s;
+}
+.slider::before {
+  content:''; position:absolute; width:16px; height:16px;
+  left:3px; top:3px; background:var(--muted); border-radius:50%; transition:.3s;
+}
+.toggle input:checked + .slider { background:rgba(79,110,247,.2); border-color:var(--accent); }
+.toggle input:checked + .slider::before { transform:translateX(20px); background:var(--accent); }
+.keywords-wrap { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:8px; min-height:28px; }
+.kw-tag {
+  display:flex; align-items:center; gap:5px;
+  background:rgba(79,110,247,.1); border:1px solid rgba(79,110,247,.25);
+  color:#818cf8; font-family:'DM Mono',monospace; font-size:12px;
+  padding:4px 10px; border-radius:6px;
+}
+.kw-remove {
+  background:none; border:none; color:#818cf8; cursor:pointer;
+  font-size:14px; line-height:1; padding:0; opacity:.6; transition:opacity .2s;
+}
+.kw-remove:hover { opacity:1; }
+.kw-input-wrap { display:flex; gap:8px; }
+.kw-input-wrap input { flex:1; }
+.btn-add {
+  background:rgba(79,110,247,.15); border:1px solid rgba(79,110,247,.3);
+  color:#818cf8; font-family:'Syne',sans-serif; font-size:13px; font-weight:600;
+  padding:11px 16px; border-radius:10px; cursor:pointer; white-space:nowrap; transition:all .2s;
+}
+.btn-add:hover { background:rgba(79,110,247,.25); border-color:var(--accent); }
+.divider { height:1px; background:var(--border); margin:24px 0; }
+.btn-run {
+  width:100%; background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none; color:white; font-family:'Syne',sans-serif; font-size:16px;
+  font-weight:700; padding:17px; border-radius:14px; cursor:pointer;
+  letter-spacing:.02em; transition:all .3s; position:relative; overflow:hidden; margin-top:8px;
+}
+.btn-run:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 12px 40px rgba(79,110,247,.35); }
+.btn-run:disabled { opacity:.5; cursor:not-allowed; }
+.btn-run::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,.1),transparent); pointer-events:none; }
+.btn-resume {
+  width:100%; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.4);
+  color:#fcd34d; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; margin-top:8px;
+  display:none; transition:all .3s;
+}
+.btn-resume:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
+.btn-controls {
+  display:none; gap:10px; margin-top:10px;
+}
+.btn-controls.active { display:flex; }
+.btn-pause {
+  flex:1; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.4);
+  color:#fcd34d; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; transition:all .3s;
+}
+.btn-pause:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
+.btn-stop {
+  flex:1; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+  color:#f87171; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; transition:all .3s;
+}
+.btn-stop:hover { background:rgba(239,68,68,.22); transform:translateY(-1px); }
+.resume-banner {
+  display:none; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.3);
+  border-radius:12px; padding:14px 18px; margin-top:10px;
+  font-family:'DM Mono',monospace; font-size:12px; color:#fcd34d; line-height:1.9;
+}
+.resume-banner.visible { display:block; }
+.resume-banner strong { color:#fef3c7; }
+.progress-wrap { display:none; margin-top:22px; }
+.progress-wrap.active { display:block; }
+.progress-bar-bg { background:var(--surface2); border:1px solid var(--border); border-radius:100px; height:5px; overflow:hidden; margin-bottom:14px; }
+.progress-bar { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:100px; width:0%; transition:width .4s ease; position:relative; overflow:hidden; }
+.progress-bar::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.3),transparent); animation:shimmer 1.5s infinite; }
+.log { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:14px; font-family:'DM Mono',monospace; font-size:12px; color:var(--muted); max-height:160px; overflow-y:auto; line-height:1.9; }
+.log-line { animation:fadeIn .3s ease both; }
+.log-line.success { color:var(--green); }
+.log-line.error { color:var(--red); }
+.log-line.info { color:#818cf8; }
+.log-line.warn { color:var(--yellow); }
+.results { display:none; animation:fadeUp .5s ease both; }
+.results.active { display:block; }
+.stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:18px; }
+.stat-box { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:16px; text-align:center; }
+.stat-num { font-size:28px; font-weight:800; background:linear-gradient(135deg,var(--accent),var(--accent2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; display:block; line-height:1; margin-bottom:5px; }
+.stat-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-family:'DM Mono',monospace; }
+.summary-row { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:18px; }
+.summary-tag { display:inline-flex; align-items:center; gap:5px; background:rgba(79,110,247,.08); border:1px solid rgba(79,110,247,.2); color:#818cf8; font-family:'DM Mono',monospace; font-size:11px; padding:4px 11px; border-radius:100px; }
+.table-wrap { overflow-x:auto; border-radius:12px; border:1px solid var(--border); margin-bottom:18px; max-height:380px; overflow-y:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+thead { position:sticky; top:0; z-index:2; }
+th { background:var(--surface2); color:var(--muted); font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase; letter-spacing:.08em; padding:11px 13px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; }
+td { padding:11px 13px; border-bottom:1px solid rgba(42,42,61,.5); vertical-align:top; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+tr:last-child td { border-bottom:none; }
+tr:hover td { background:rgba(79,110,247,.04); }
+.link-cell a { color:#818cf8; text-decoration:none; font-family:'DM Mono',monospace; font-size:11px; }
+.link-cell a:hover { text-decoration:underline; }
+.count-badge { display:inline-block; background:rgba(79,110,247,.15); color:#818cf8; font-family:'DM Mono',monospace; font-size:11px; padding:2px 8px; border-radius:100px; }
+.platform-tag { display:inline-block; background:rgba(124,58,237,.15); color:#a78bfa; font-size:10px; font-family:'DM Mono',monospace; padding:2px 7px; border-radius:4px; margin:1px; }
+.btn-download { width:100%; background:rgba(34,197,94,.1); border:1px solid rgba(34,197,94,.3); color:var(--green); font-family:'Syne',sans-serif; font-size:15px; font-weight:700; padding:15px; border-radius:14px; cursor:pointer; letter-spacing:.02em; transition:all .2s; }
+.btn-download:hover { background:rgba(34,197,94,.18); box-shadow:0 8px 24px rgba(34,197,94,.15); transform:translateY(-1px); }
+.token-saved {
+  display:none; align-items:center; gap:6px;
+  font-family:'DM Mono',monospace; font-size:11px; color:var(--green);
+  margin-top:6px;
+}
+.token-saved.visible { display:flex; }
+.token-saved::before { content:'✓ '; font-weight:700; }
+.btn-clear-token {
+  background:none; border:none; color:var(--muted); font-family:'DM Mono',monospace;
+  font-size:11px; cursor:pointer; margin-left:8px; text-decoration:underline;
+  transition:color .2s;
+}
+.btn-clear-token:hover { color:var(--red); }
+.token-link {
+  color:#818cf8; font-size:12px; font-weight:600; text-decoration:none;
+  margin-left:10px; font-family:'DM Mono',monospace;
+  border-bottom:1px dashed rgba(129,140,248,.4); padding-bottom:1px;
+  transition:color .2s;
+}
+.token-link:hover { color:var(--accent); }
+.token-hint-box {
+  display:none; background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.25);
+  border-radius:10px; padding:12px 16px; margin-bottom:10px;
+  font-size:13px; color:#fca5a5; line-height:1.6;
+}
+.token-hint-box.visible { display:block; }
+.llt-box {
+  background: rgba(79,110,247,.06); border: 1px solid rgba(79,110,247,.2);
+  border-radius: 12px; padding: 16px 18px; margin-top: 14px;
+}
+.llt-box.success { background: rgba(34,197,94,.07); border-color: rgba(34,197,94,.3); }
+.llt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.btn-llt {
+  background: rgba(79,110,247,.15); border: 1px solid rgba(79,110,247,.3);
+  color: #818cf8; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+  padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: all .2s; width: 100%;
+}
+.btn-llt:hover { background: rgba(79,110,247,.25); border-color: var(--accent); }
+.llt-result { font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 8px; min-height: 16px; }
+.llt-result.ok { color: var(--green); }
+.llt-result.err { color: var(--red); }
+.token-expire {
+  font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 5px;
+}
+.token-expire.ok { color: var(--green); }
+.token-expire.warn { color: var(--yellow); }
+.token-expire.err { color: var(--red); }
+.cors-banner {
+  background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.3);
+  border-radius: 14px; padding: 16px 20px; margin-bottom: 22px;
+  font-size: 13px; color: #fcd34d; line-height: 1.8;
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.cors-banner-icon { font-size: 22px; flex-shrink: 0; margin-top: 1px; }
+.cors-banner a {
+  color: #fbbf24; font-weight: 700;
+  text-decoration: none; border-bottom: 1px dashed rgba(251,191,36,.5);
+}
+.cors-banner a:hover { border-bottom-color: #fbbf24; }
+.cors-banner strong { color: #fef3c7; }
+.cors-banner-hide {
+  background: none; border: none; color: rgba(253,230,138,.4);
+  cursor: pointer; font-size: 18px; margin-left: auto; padding: 0 0 0 10px;
+  transition: color .2s; flex-shrink: 0;
+}
+.cors-banner-hide:hover { color: #fcd34d; }
+.gs-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 32px; margin-bottom: 18px;
+  animation: fadeUp .5s ease both;
+}
+.gs-status {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'DM Mono', monospace; font-size: 13px;
+  padding: 12px 16px; border-radius: 10px; margin-top: 12px;
+  border: 1px solid var(--border); background: var(--surface2);
+}
+.gs-status.connected { border-color: rgba(34,197,94,.3); background: rgba(34,197,94,.07); color: var(--green); }
+.gs-status.error { border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.07); color: var(--red); }
+.gs-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.gs-status.connected .gs-dot { background: var(--green); }
+.gs-status.error .gs-dot { background: var(--red); }
+.btn-gs {
+  background: rgba(79,110,247,.15); border: 1px solid rgba(79,110,247,.3);
+  color: #818cf8; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+  padding: 10px 18px; border-radius: 10px; cursor: pointer; transition: all .2s;
+}
+.btn-gs:hover { background: rgba(79,110,247,.25); border-color: var(--accent); }
+.btn-gs:disabled { opacity: .4; cursor: not-allowed; }
+.btn-push {
+  width: 100%; background: linear-gradient(135deg, #16a34a, #15803d);
+  border: none; color: white; font-family: 'Syne', sans-serif; font-size: 15px;
+  font-weight: 700; padding: 15px; border-radius: 14px; cursor: pointer;
+  letter-spacing: .02em; transition: all .3s; margin-top: 10px; display: none;
+}
+.btn-push:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(22,163,74,.3); }
+.btn-push:disabled { opacity: .5; cursor: not-allowed; }
+.btn-push.visible { display: block; }
+.push-result {
+  display: none; margin-top: 12px; padding: 14px 18px; border-radius: 12px;
+  font-family: 'DM Mono', monospace; font-size: 12px; line-height: 1.8;
+  border: 1px solid rgba(34,197,94,.3); background: rgba(34,197,94,.07); color: var(--green);
+}
+.push-result.visible { display: block; }
+.push-result.error { border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.07); color: var(--red); }
+.token-hint-box a { color:#f87171; font-weight:600; }
+.token-hint-box strong { color:#fcd34d; }
+.token-meta {
+  font-family:'DM Mono',monospace; font-size:11px; color:var(--muted);
+  margin-top:5px; min-height:16px;
+}
+.token-meta.ok { color:var(--green); }
+.token-meta.warn { color:var(--yellow); }
+.live-feed { display:none; margin-top:20px; }
+.live-feed.active { display:block; }
+.live-feed-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:10px;
+}
+.live-feed-title {
+  font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); font-family:'DM Mono',monospace;
+}
+.live-count {
+  font-family:'DM Mono',monospace; font-size:11px;
+  background:rgba(79,110,247,.15); color:#818cf8;
+  padding:3px 10px; border-radius:100px;
+}
+.live-table-wrap {
+  border-radius:12px; border:1px solid var(--border);
+  max-height:300px; overflow-y:auto; overflow-x:auto;
+}
+.live-table-wrap table { width:100%; border-collapse:collapse; font-size:12px; }
+.live-table-wrap th {
+  background:var(--surface2); color:var(--muted);
+  font-family:'DM Mono',monospace; font-size:10px; text-transform:uppercase;
+  letter-spacing:.07em; padding:9px 12px; text-align:left;
+  border-bottom:1px solid var(--border); white-space:nowrap;
+  position:sticky; top:0; z-index:2;
+}
+.live-table-wrap td {
+  padding:9px 12px; border-bottom:1px solid rgba(42,42,61,.4);
+  vertical-align:top; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.live-table-wrap tr:last-child td { border-bottom:none; }
+.live-table-wrap tr:hover td { background:rgba(79,110,247,.04); }
+.new-row td { animation: highlightRow .8s ease both; }
+@keyframes highlightRow { from{background:rgba(79,110,247,.15);} to{background:transparent;} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+.toast {
+  position:fixed; bottom:28px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); font-family:'DM Mono',monospace; font-size:13px;
+  padding:12px 24px; border-radius:100px; z-index:999;
+  opacity:0; transition:all .3s ease; pointer-events:none; white-space:nowrap;
+}
+.toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+@keyframes shimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--surface2); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+</style>
+</head>
+<body>
+<div class="container">
 
+<div id="corsBanner" class="cors-banner">
+  <div class="cors-banner-icon">⚡</div>
+  <div>
+    <strong>Для работы с файла на десктопе нужно расширение CORS Unblock.</strong><br>
+    Установи расширение для браузера — это займёт 30 секунд и делается один раз:<br>
+    Chrome: <a href="https://chrome.google.com/webstore/detail/cors-unblock/lfhmikememgdcahcdlaciloancbhjino" target="_blank">CORS Unblock → Chrome Web Store</a><br>
+    После установки — <strong>включи расширение</strong> (иконка в панели → кнопка On/Off) и перезагрузи страницу.
+  </div>
+  <button type="button" class="cors-banner-hide" onclick="document.getElementById('corsBanner').style.display='none'" title="Скрыть">×</button>
+</div>
+
+<div class="header">
+  <div class="badge">Meta Ad Library</div>
+  <h1>Ad Collector</h1>
+  <p class="subtitle">Сбор рекламодателей с полными фильтрами — как в Meta Ad Library</p>
+</div>
+
+<!-- Access -->
+<div class="card" style="animation-delay:.05s">
+  <div class="card-title">🔑 Доступ</div>
+  <div class="grid-2">
+    <div class="field">
+      <label>Access Token <a href="https://developers.facebook.com/tools/explorer/" target="_blank" class="label-hint" style="text-decoration:none;border-bottom:1px dashed rgba(129,140,248,.4);">→ Graph Explorer (разрешения: ads_read + pages_read_engagement)</a></label>
+      <div class="token-wrap">
+        <input type="password" id="token" placeholder="EAALBe9om..." autocomplete="off">
+        <button type="button" class="toggle-vis" onclick="toggleVis()">👁</button>
+      </div>
+      <div class="token-saved" id="tokenSaved">
+        Токен сохранён
+        <button type="button" class="btn-clear-token" onclick="clearToken()">Удалить</button>
+      </div>
+      <div class="token-meta" id="tokenMeta"></div>
+      <div class="token-expire" id="tokenExpire"></div>
+    </div>
+    <div class="field">
+      <label>Страна таргетинга</label>
+      <select id="country" onchange="updateCriteria(); saveSettings();">
+        <option value="PL">🇵🇱 Польша</option>
+        <option value="DE">🇩🇪 Германия</option>
+        <option value="CZ">🇨🇿 Чехия</option>
+        <option value="SK">🇸🇰 Словакия</option>
+        <option value="LT">🇱🇹 Литва</option>
+        <option value="LV">🇱🇻 Латвия</option>
+        <option value="EE">🇪🇪 Эстония</option>
+        <option value="UA">🇺🇦 Украина</option>
+        <option value="US">🇺🇸 США</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Long-lived token section -->
+  <div class="llt-box" id="lltBox">
+    <div class="card-title" style="margin-bottom:12px">⏱ Долгосрочный токен (60 дней)</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.7">
+      Обычный токен из Graph Explorer живёт <strong style="color:var(--yellow)">1–2 часа</strong>. Чтобы получить токен на <strong style="color:var(--green)">60 дней</strong> — введи App ID и App Secret из своего Facebook-приложения.<br>
+      <a href="https://developers.facebook.com/apps/" target="_blank" style="color:#818cf8;font-size:11px;border-bottom:1px dashed rgba(129,140,248,.4);text-decoration:none;">→ developers.facebook.com/apps</a>
+      <span style="color:var(--muted);font-size:11px"> — выбери приложение → "Настройки" → "Основные"</span>
+    </p>
+    <div class="llt-grid">
+      <div class="field" style="margin:0">
+        <label style="font-size:12px">App ID</label>
+        <input type="text" id="appId" placeholder="123456789012345" oninput="saveLltSettings()">
+      </div>
+      <div class="field" style="margin:0">
+        <label style="font-size:12px">App Secret <span class="label-hint">(хранится только в браузере)</span></label>
+        <div class="token-wrap">
+          <input type="password" id="appSecret" placeholder="abc123..." oninput="saveLltSettings()">
+          <button type="button" class="toggle-vis" onclick="toggleVisEl('appSecret')">👁</button>
+        </div>
+      </div>
+    </div>
+    <button type="button" class="btn-llt" onclick="getLongLivedToken()">🔄 Получить долгосрочный токен (60 дней)</button>
+    <div class="llt-result" id="lltResult"></div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card" style="animation-delay:.1s">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+  <div class="card-title" style="margin-bottom:0">🎛️ Фильтры</div>
+  <button type="button" onclick="resetSettings()" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#f87171;font-family:'DM Mono',monospace;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">↺ Сбросить фильтры</button>
+</div>
+
+  <!-- Criteria banner -->
+  <div class="criteria-banner visible" id="criteriaBanner">
+    <div class="criteria-label">Парсер будет собирать по следующим критериям:</div>
+    <div id="criteriaContent"></div>
+  </div>
+
+  <div class="section-label">Язык и платформа</div>
+  <div class="grid-3" style="margin-bottom:20px">
+    <div class="field" style="margin:0">
+      <label>Язык объявления</label>
+      <select id="adLanguage" onchange="updateCriteria(); saveSettings();">
+        <option value="">Все языки</option>
+        <option value="cyrillic">🔤 Кириллица (RU + UK)</option>
+        <option value="ru">🇷🇺 Русский</option>
+        <option value="uk">🇺🇦 Украинский</option>
+        <option value="pl">🇵🇱 Польский</option>
+        <option value="en">🇬🇧 Английский</option>
+        <option value="de">🇩🇪 Немецкий</option>
+      </select>
+    </div>
+    <div class="field" style="margin:0">
+      <label>Платформа</label>
+      <select id="platform" onchange="updateCriteria(); saveSettings();">
+        <option value="">Все платформы</option>
+        <option value="instagram">Instagram</option>
+        <option value="facebook">Facebook</option>
+        <option value="audience_network">Audience Network</option>
+        <option value="messenger">Messenger</option>
+      </select>
+    </div>
+    <div class="field" style="margin:0">
+      <label>Тип медиафайла</label>
+      <select id="mediaType" onchange="updateCriteria(); saveSettings();">
+        <option value="all">Все типы</option>
+        <option value="image">🖼 Изображение</option>
+        <option value="video">🎥 Видео</option>
+        <option value="meme">😂 Мем</option>
+        <option value="none">📝 Без медиа</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-label">Статус объявления</div>
+  <div class="grid-2" style="margin-bottom:20px">
+    <div class="field" style="margin:0">
+      <label>Статус "Активно"</label>
+      <select id="adStatus" onchange="updateCriteria(); saveSettings();">
+        <option value="ALL">Активные и неактивные</option>
+        <option value="ACTIVE">Только активные</option>
+        <option value="INACTIVE">Только неактивные</option>
+      </select>
+    </div>
+    <div class="field" style="margin:0">
+      <label>Лимит объявлений</label>
+      <select id="maxAds" onchange="updateCriteria(); saveSettings();">
+        <option value="500">500</option>
+        <option value="1000">1 000</option>
+        <option value="2000" selected>2 000</option>
+        <option value="5000">5 000</option>
+        <option value="0">Без ограничений</option>
+      </select>
+    </div>
+  </div>
+  <div class="grid-2" style="margin-bottom:20px">
+    <div class="field" style="margin:0">
+      <label>Скорость запросов <span class="label-hint">(медленнее = меньше ошибок)</span></label>
+      <select id="reqDelay" onchange="saveSettings();">
+        <option value="800">Быстро (800мс) — риск rate limit</option>
+        <option value="2000">Нормально (2 сек)</option>
+        <option value="4000">Медленно (4 сек)</option>
+        <option value="8000">Очень медленно (8 сек)</option>
+        <option value="20000" selected>Супер медленно (20 сек) — максимум</option>
+      </select>
+    </div>
+    <div class="field" style="margin:0">
+      <label>При rate limit — пауза</label>
+      <select id="rateLimitPause" onchange="saveSettings();">
+        <option value="60">60 секунд</option>
+        <option value="120">2 минуты</option>
+        <option value="300" selected>5 минут (рекомендуется)</option>
+        <option value="600">10 минут</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-label">Показы по дате</div>
+  <div class="grid-2" style="margin-bottom:20px">
+    <div class="field" style="margin:0">
+      <label>С <span class="label-hint">(можно выбрать один день)</span></label>
+      <input type="date" id="dateFrom" onchange="updateCriteria(); saveSettings();">
+    </div>
+    <div class="field" style="margin:0">
+      <label>По</label>
+      <input type="date" id="dateTo" onchange="updateCriteria(); saveSettings();">
+    </div>
+  </div>
+
+  <div class="section-label">Ключевые слова поиска</div>
+  <div class="keywords-wrap" id="kwTags"></div>
+  <div class="kw-input-wrap" style="margin-bottom:0">
+    <input type="text" id="kwInput" placeholder="Добавить слово..." onkeydown="if(event.key==='Enter')addKw()">
+    <button type="button" class="btn-add" onclick="addKw()">+ Добавить</button>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="token-hint-box" id="tokenHintBox">
+    ⚠️ <strong>Токен недействителен или истёк.</strong> Получите новый токен:<br>
+    1. Перейдите на <a href="https://developers.facebook.com/tools/explorer/" target="_blank">developers.facebook.com/tools/explorer</a><br>
+    2. Выберите своё приложение и добавьте разрешение <strong>ads_read</strong><br>
+    3. Нажмите "Generate Access Token" и вставьте его выше
+  </div>
+  <button type="button" class="btn-run" id="btnRun" onclick="runCollection(false)">
+    🚀 Начать сбор по фильтрам
+  </button>
+  <div class="resume-banner" id="resumeBanner"></div>
+  <button type="button" class="btn-resume" id="btnResume" onclick="runCollection(true)">
+    ▶ Продолжить с места остановки
+  </button>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="btn-controls" id="btnControls">
+      <button type="button" class="btn-pause" id="btnPause" onclick="togglePause()">⏸ Приостановить</button>
+      <button type="button" class="btn-stop" id="btnStop" onclick="stopCollection()">⏹ Завершить сбор</button>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="log" id="log"></div>
+  </div>
+  <div class="live-feed" id="liveFeed">
+    <div class="live-feed-header">
+      <div class="live-feed-title">🔴 Объявления в реальном времени <span style="color:var(--muted);font-size:10px;font-weight:400">(последние 150)</span></div>
+      <div class="live-count" id="liveCount">0 объявлений</div>
+    </div>
+    <div class="live-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Страница</th><th>Платформы</th><th>Дата начала</th><th>Текст объявления</th><th>Ссылка</th>
+          </tr>
+        </thead>
+        <tbody id="liveTbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card results" id="results">
+  <div class="card-title">📊 Результаты</div>
+  <div class="stats-grid">
+    <div class="stat-box"><span class="stat-num" id="statAdvertisers">0</span><span class="stat-label">Рекламодателей</span></div>
+    <div class="stat-box"><span class="stat-num" id="statAds">0</span><span class="stat-label">Объявлений</span></div>
+    <div class="stat-box"><span class="stat-num" id="statTotal">0</span><span class="stat-label">Всего из API</span></div>
+    <div class="stat-box"><span class="stat-num" id="statPages">0</span><span class="stat-label">API запросов</span></div>
+  </div>
+  <div class="summary-row" id="summaryRow"></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Название страницы</th><th>Платформы</th>
+          <th>Дата начала</th><th>Объявлений</th><th>Instagram</th><th>Telegram</th><th>Сайт</th><th>Facebook</th><th>Объявление</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  <button type="button" class="btn-download" onclick="downloadExcel()">⬇️ Скачать Excel</button>
+</div>
+
+<!-- Google Sheets Integration -->
+<div class="gs-card" style="animation-delay:.3s">
+  <div class="card-title">📊 Экспорт в Google Sheets</div>
+
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="field" style="margin:0">
+      <label>Google Client ID <span class="label-hint">→ <a href="https://console.cloud.google.com/" target="_blank" style="color:#818cf8;text-decoration:none;border-bottom:1px dashed rgba(129,140,248,.4)">console.cloud.google.com</a></span></label>
+      <input type="text" id="gClientId" placeholder="xxxx.apps.googleusercontent.com" oninput="saveGsSettings()">
+    </div>
+    <div class="field" style="margin:0">
+      <label>ID таблицы Google Sheets <span class="label-hint">(из URL)</span></label>
+      <input type="text" id="gSheetId" placeholder="1nRSo89aPTCZDTnSDXJbFVy..." oninput="saveGsSettings()">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button type="button" class="btn-gs" id="btnGsLogin" onclick="gsLogin()">🔑 Войти через Google</button>
+    <button type="button" class="btn-gs" id="btnGsLogout" onclick="gsLogout()" style="display:none;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#f87171">Выйти</button>
+    <div class="gs-status" id="gsStatus" style="flex:1;min-width:200px">
+      <div class="gs-dot"></div>
+      <span id="gsStatusText">Не подключено</span>
+    </div>
+  </div>
+
+  <div style="margin-top:16px">
+    <label style="font-size:13px;font-weight:600;color:var(--text);display:block;margin-bottom:7px">
+      Название листа <span class="label-hint">(по умолчанию: Лист1)</span>
+    </label>
+    <input type="text" id="gSheetName" placeholder="Лист1" value="Лист1" style="max-width:200px" oninput="saveGsSettings()">
+  </div>
+
+  <button type="button" class="btn-push visible" id="btnPush" onclick="pushToSheets()" disabled>
+    📤 Добавить новые данные в таблицу
+  </button>
+  <div class="push-result" id="pushResult"></div>
+</div>
+
+</div>
+<script>
+let keywords = ['instagram.com'];
+
+// ---- Settings persistence ----
+const SETTINGS_KEY = 'meta_ad_settings';
+function getDefaultSettings() {
+  return {
+    country: 'PL',
+    adLanguage: 'cyrillic',
+    platform: '',
+    mediaType: 'all',
+    adStatus: 'ALL',
+    maxAds: '2000',
+    dateFrom: '2019-01-01',
+    dateTo: new Date().toISOString().slice(0,10),
+    keywords: ['instagram.com'],
+  };
+}
+
+function saveSettings() {
+  const s = {
+    country:     document.getElementById('country').value,
+    adLanguage:  document.getElementById('adLanguage').value,
+    platform:    document.getElementById('platform').value,
+    mediaType:   document.getElementById('mediaType').value,
+    adStatus:    document.getElementById('adStatus').value,
+    maxAds:      document.getElementById('maxAds').value,
+    dateFrom:    document.getElementById('dateFrom').value,
+    dateTo:      document.getElementById('dateTo').value,
+    keywords:    [...keywords],
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+function loadSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  const d = getDefaultSettings();
+  const s = raw ? JSON.parse(raw) : d;
+  document.getElementById('country').value    = s.country    ?? d.country;
+  document.getElementById('adLanguage').value = s.adLanguage ?? d.adLanguage;
+  document.getElementById('platform').value   = s.platform   ?? d.platform;
+  document.getElementById('mediaType').value  = s.mediaType  ?? d.mediaType;
+  document.getElementById('adStatus').value   = s.adStatus   ?? d.adStatus;
+  document.getElementById('maxAds').value     = s.maxAds     ?? d.maxAds;
+  document.getElementById('dateFrom').value   = s.dateFrom   ?? d.dateFrom;
+  document.getElementById('dateTo').value     = s.dateTo     ?? d.dateTo;
+  keywords = s.keywords && s.keywords.length ? [...s.keywords] : [...d.keywords];
+  renderKwTags();
+  updateCriteria();
+}
+
+function resetSettings() {
+  localStorage.removeItem(SETTINGS_KEY);
+  const d = getDefaultSettings();
+  document.getElementById('country').value    = d.country;
+  document.getElementById('adLanguage').value = d.adLanguage;
+  document.getElementById('platform').value   = d.platform;
+  document.getElementById('mediaType').value  = d.mediaType;
+  document.getElementById('adStatus').value   = d.adStatus;
+  document.getElementById('maxAds').value     = d.maxAds;
+  document.getElementById('dateFrom').value   = d.dateFrom;
+  document.getElementById('dateTo').value     = d.dateTo;
+  keywords = [...d.keywords];
+  renderKwTags();
+  updateCriteria();
+  showToast('Настройки сброшены до значений по умолчанию');
+}
+
+
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+
+
+document.getElementById('token').addEventListener('input', function() {
+  const v = this.value.trim();
+  if (v.length > 20) {
+    localStorage.setItem('meta_ad_token', v);
+    document.getElementById('tokenSaved').classList.add('visible');
+    clearTimeout(window._tokenCheckTimer);
+    window._tokenCheckTimer = setTimeout(() => checkTokenExpiry(v), 800);
+  } else {
+    localStorage.removeItem('meta_ad_token');
+    document.getElementById('tokenSaved').classList.remove('visible');
+    document.getElementById('tokenExpire').textContent = '';
+  }
+});
+
+function clearToken() {
+  localStorage.removeItem('meta_ad_token');
+  document.getElementById('token').value = '';
+  document.getElementById('tokenSaved').classList.remove('visible');
+}
+
+// ---- Live feed ----
+let liveRowCount = 0;
+
+function initLiveFeed() {
+  liveRowCount = 0;
+  document.getElementById('liveTbody').innerHTML = '';
+  document.getElementById('liveCount').textContent = '0 объявлений';
+  document.getElementById('liveFeed').classList.add('active');
+}
+
+const LIVE_MAX_ROWS = 150; // max rows shown in live table
+
+function addLiveRows(ads) {
+  const tbody = document.getElementById('liveTbody');
+  liveRowCount += ads.length;
+  document.getElementById('liveCount').textContent = liveRowCount + ' объявлений';
+
+  // Only render last batch, remove oldest rows if over limit
+  const frag = document.createDocumentFragment();
+  for (const ad of ads) {
+    const bodies = ad.ad_creative_bodies||[];
+    const titles = ad.ad_creative_link_titles||[];
+    const text = [...bodies,...titles].join(' ').slice(0,80);
+    const plats = (ad.publisher_platforms||[]).join(', ');
+    const start = (ad.ad_delivery_start_time||'').slice(0,10);
+    const url = ad.ad_snapshot_url||'';
+    const tr = document.createElement('tr');
+    tr.className = 'new-row';
+    tr.innerHTML = `
+      <td>${liveRowCount - ads.length + frag.childElementCount + 1}</td>
+      <td title="${ad.page_name||''}">${(ad.page_name||'—').slice(0,25)}</td>
+      <td>${plats||'—'}</td>
+      <td>${start||'—'}</td>
+      <td title="${text}">${text||'—'}</td>
+      <td>${url?'<a href="'+url+'" target="_blank" style="color:#818cf8;font-family:DM Mono,monospace;font-size:11px;text-decoration:none;">→</a>':'—'}</td>`;
+    frag.appendChild(tr);
+  }
+  tbody.appendChild(frag);
+
+  // Remove old rows if too many
+  while (tbody.rows.length > LIVE_MAX_ROWS) {
+    tbody.deleteRow(0);
+  }
+
+  // auto-scroll to bottom
+  const wrap = tbody.closest('.live-table-wrap');
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function renderKwTags() {
+  document.getElementById('kwTags').innerHTML = keywords.map((k,i) =>
+    `<span class="kw-tag">${k}<button type="button" class="kw-remove" onclick="removeKw(${i})">×</button></span>`
+  ).join('');
+  updateCriteria();
+}
+function addKw() {
+  const inp = document.getElementById('kwInput');
+  const v = inp.value.trim();
+  if (v && !keywords.includes(v)) { keywords.push(v); renderKwTags(); saveSettings(); }
+  inp.value = '';
+}
+function removeKw(i) { keywords.splice(i,1); renderKwTags(); saveSettings(); }
+function toggleVis() {
+  const i = document.getElementById('token');
+  i.type = i.type==='password'?'text':'password';
+}
+
+function updateCriteria() {
+  const get = id => document.getElementById(id);
+  const sel = id => { const e=get(id); return e.options[e.selectedIndex]?.text||''; };
+
+  const items = [
+    `🌍 <span class="criteria-item">Страна: <strong>${sel('country')}</strong></span>`,
+    `🔤 <span class="criteria-item">Язык: <strong>${get('adLanguage').value ? sel('adLanguage') : 'Все языки'}</strong></span>`,
+    `📱 <span class="criteria-item">Платформа: <strong>${get('platform').value ? sel('platform') : 'Все платформы'}</strong></span>`,
+    `🖼 <span class="criteria-item">Медиа: <strong>${get('mediaType').value!=='all' ? sel('mediaType') : 'Все типы'}</strong></span>`,
+    `📡 <span class="criteria-item">Статус: <strong>${sel('adStatus')}</strong></span>`,
+    get('dateFrom').value ? `📅 <span class="criteria-item">С: <strong>${get('dateFrom').value}</strong></span>` : '',
+    get('dateTo').value   ? `📅 <span class="criteria-item">По: <strong>${get('dateTo').value}</strong></span>` : '',
+    keywords.length ? `🔍 <span class="criteria-item">Слова: <strong>${keywords.join(', ')}</strong></span>` : '',
+    `📦 <span class="criteria-item">Лимит: <strong>${get('maxAds').value==='0'?'без ограничений':sel('maxAds')}</strong></span>`,
+  ].filter(Boolean);
+
+  document.getElementById('criteriaContent').innerHTML = items.join(' ');
+}
+
+function extractContacts(ad, text) {
+  const contacts = { fb_page: '', instagram: '', telegram: '', website: '' };
+
+  // Facebook page link from page_id
+  if (ad.page_id) contacts.fb_page = 'https://www.facebook.com/' + ad.page_id;
+
+  // Collect all text sources including CTA URLs
+  const allText = [
+    text,
+    ...(ad.ad_creative_link_captions || []),
+    ...(ad.ad_creative_link_descriptions || []),
+    ...(ad.ad_creative_link_titles || []),
+    ...(ad.ad_creative_link_urls || []),
+    ...(ad.ad_creative_link_button_types || []),
+  ].join(' ');
+
+  // Instagram — explicit domain OR @mention (@ always = instagram)
+  const igExplicit = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
+  const igAt = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,30})/);
+  if (igExplicit) {
+    contacts.instagram = 'https://instagram.com/' + igExplicit[1];
+  } else if (igAt) {
+    contacts.instagram = 'https://instagram.com/' + igAt[1];
+  }
+
+  // Also check CTA URLs directly for instagram.com
+  if (!contacts.instagram && ad.ad_creative_link_urls) {
+    for (const url of ad.ad_creative_link_urls) {
+      const m = url.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
+      if (m) { contacts.instagram = 'https://instagram.com/' + m[1]; break; }
+    }
+  }
+
+  // Telegram — only explicit t.me / telegram.me links (NOT bare @)
+  const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
+  if (tgMatch) {
+    contacts.telegram = 'https://t.me/' + tgMatch[1];
+  }
+  // Also check CTA URLs for t.me
+  if (!contacts.telegram && ad.ad_creative_link_urls) {
+    for (const url of ad.ad_creative_link_urls) {
+      const m = url.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
+      if (m) { contacts.telegram = 'https://t.me/' + m[1]; break; }
+    }
+  }
+
+  // Website — check CTA URLs first (most reliable), then text
+  const badDomains = /^https?:\/\/(?:www\.)?(facebook|instagram|meta|fb\.com|t\.me|telegram\.me)/i;
+  if (ad.ad_creative_link_urls) {
+    for (const url of ad.ad_creative_link_urls) {
+      if (!badDomains.test(url)) {
+        contacts.website = url.replace(/[.,;)>]+$/, '');
+        break;
+      }
+    }
+  }
+  if (!contacts.website) {
+    const urlMatch = allText.match(/https?:\/\/(?!(?:www\.)?(facebook|instagram|meta|fb\.com|t\.me|telegram\.me))[^\s"'<>]{4,80}/gi);
+    if (urlMatch && urlMatch.length) {
+      contacts.website = urlMatch[0].replace(/[.,;)>]+$/, '');
+    }
+  }
+
+  return contacts;
+}
+
+function matchesLanguage(text, lang) {
+  if (!lang) return true;
+  if (!text) return false;
+  const cyrCount = (text.match(/[а-яёА-ЯЁіїєІЇЄ]/g)||[]).length;
+  const latinCount = (text.match(/[a-zA-Z]/g)||[]).length;
+  if (lang==='cyrillic') return cyrCount > 10 && cyrCount > latinCount * 0.3;
+  if (lang==='ru') return (text.match(/[а-яёА-ЯЁ]/g)||[]).length > 10;
+  if (lang==='uk') return (text.match(/[іїєІЇЄ]/g)||[]).length > 3;
+  if (lang==='pl') return (text.match(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g)||[]).length > 3;
+  return true;
+}
+
+function log(msg, type='') {
+  const el = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = 'log-line '+type;
+  d.textContent = `[${new Date().toLocaleTimeString('ru')}] ${msg}`;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+function setProgress(p) { document.getElementById('progressBar').style.width = p+'%'; }
+
+let collectedData=[], totalRaw=0, pagesCollected=0;
+let _isPaused = false, _isStopped = false;
+
+function togglePause() {
+  _isPaused = !_isPaused;
+  const btn = document.getElementById('btnPause');
+  if (_isPaused) {
+    btn.textContent = '▶ Продолжить';
+    btn.style.background = 'rgba(34,197,94,.15)';
+    btn.style.borderColor = 'rgba(34,197,94,.4)';
+    btn.style.color = '#4ade80';
+    log('⏸ Сбор приостановлен. Нажми «Продолжить» чтобы возобновить.', 'warn');
+  } else {
+    btn.textContent = '⏸ Приостановить';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    log('▶ Сбор возобновлён.', 'info');
+  }
+}
+
+function stopCollection() {
+  if (!confirm('Завершить сбор? Уже собранные данные будут показаны.')) return;
+  _isStopped = true;
+  _isPaused = false;
+  log('⏹ Сбор остановлен пользователем.', 'warn');
+  document.getElementById('btnControls').classList.remove('active');
+}
+
+// ============================================================
+// 💾 RESUME STATE — сохранение/восстановление прогресса
+// ============================================================
+const RESUME_KEY = 'meta_ad_resume_v2';
+
+function saveResumeState(kwIndex, term, cursor, allAdsSnapshot, seenSnapshot) {
+  try {
+    const state = {
+      savedAt: new Date().toISOString(),
+      kwIndex, term, cursor,
+      allAdsCount: allAdsSnapshot.length,
+      seenData: seenSnapshot,
+      filters: {
+        token: document.getElementById('token').value.trim(),
+        country: document.getElementById('country').value,
+        lang: document.getElementById('adLanguage').value,
+        platform: document.getElementById('platform').value,
+        media: document.getElementById('mediaType').value,
+        status: document.getElementById('adStatus').value,
+        dateFrom: document.getElementById('dateFrom').value,
+        dateTo: document.getElementById('dateTo').value,
+        maxAds: document.getElementById('maxAds').value,
+        keywords: [...keywords],
+      }
+    };
+    localStorage.setItem(RESUME_KEY, JSON.stringify(state));
+  } catch(e) { console.warn('Не удалось сохранить прогресс:', e); }
+}
+
+function clearResumeState() {
+  localStorage.removeItem(RESUME_KEY);
+  document.getElementById('resumeBanner').classList.remove('visible');
+  document.getElementById('resumeBanner').innerHTML = '';
+  document.getElementById('btnResume').style.display = 'none';
+}
+
+function checkResumeState() {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    const dt = new Date(s.savedAt).toLocaleString('ru');
+    const pages = Object.keys(s.seenData || {}).length;
+    const banner = document.getElementById('resumeBanner');
+    banner.innerHTML =
+      `⏸ <strong>Незавершённый сбор</strong> от ${dt}<br>` +
+      `Ключевое слово: <strong>"${s.term}"</strong> | ` +
+      `Собрано объявлений: <strong>${s.allAdsCount}</strong> | ` +
+      `Уникальных страниц: <strong>${pages}</strong>`;
+    banner.classList.add('visible');
+    document.getElementById('btnResume').style.display = 'block';
+  } catch(e) { clearResumeState(); }
+}
+
+async function fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor) {
+  const p = new URLSearchParams({
+    access_token:token, ad_reached_countries:country,
+    search_terms:term, ad_active_status:status,
+    fields:'id,page_id,page_name,ad_snapshot_url,ad_creative_bodies,ad_creative_link_titles,ad_creative_link_captions,ad_creative_link_descriptions,ad_creative_link_urls,ad_creative_link_button_types,publisher_platforms,ad_delivery_start_time,ad_delivery_stop_time,impressions,spend,currency',
+    limit:500
+  });
+  if (media && media!=='all') p.set('media_type',media);
+  if (platform) p.set('publisher_platforms',platform);
+  if (dateFrom) p.set('ad_delivery_date_min',dateFrom);
+  if (dateTo)   p.set('ad_delivery_date_max',dateTo);
+  if (cursor)   p.set('after',cursor);
+  const r = await fetch(`https://graph.facebook.com/v19.0/ads_archive?${p}`);
+  return r.json();
+}
+
+// ---- Fetch contacts from Facebook page via Graph API ----
+async function fetchPageContacts(token, pageId) {
+  try {
+    const p = new URLSearchParams({
+      access_token: token,
+      fields: 'website,link,instagram_business_account{username},connected_instagram_account{username}',
+    });
+    const r = await fetch(`https://graph.facebook.com/v19.0/${pageId}?${p}`);
+    const data = await r.json();
+    if (data.error) return {};
+    const result = {};
+    const allText = [data.website||'', data.link||''].join(' ');
+
+    // Telegram from website or link field
+    const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
+    if (tgMatch) result.telegram = 'https://t.me/' + tgMatch[1];
+
+    // Website (only if not telegram)
+    if (data.website && !/t\.me\/|telegram\.me\//i.test(data.website)) {
+      result.website = data.website;
+    }
+
+    // Instagram
+    const igAcc = data.instagram_business_account || data.connected_instagram_account;
+    if (igAcc && igAcc.username) result.instagram = 'https://instagram.com/' + igAcc.username;
+
+    return result;
+  } catch(e) {
+    return {};
+  }
+}
+
+async function runCollection(isResume = false) {
+  const token = document.getElementById('token').value.trim();
+  if (!token) { alert('Введите Access Token!'); return; }
+  if (!keywords.length) { alert('Добавьте ключевое слово!'); return; }
+
+  const country  = document.getElementById('country').value;
+  const lang     = document.getElementById('adLanguage').value;
+  const platform = document.getElementById('platform').value;
+  const media    = document.getElementById('mediaType').value;
+  const status   = document.getElementById('adStatus').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo   = document.getElementById('dateTo').value;
+  const maxAds   = parseInt(document.getElementById('maxAds').value)||0;
+
+  // --- Загружаем сохранённый прогресс если продолжаем ---
+  let resumeKwIndex = 0, resumeCursor = null, resumeSeen = {};
+  let allAds = [];
+
+  if (isResume) {
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        resumeKwIndex = s.kwIndex || 0;
+        resumeCursor  = s.cursor  || null;
+        resumeSeen    = s.seenData || {};
+        log(`▶ Восстановлен прогресс: слово "${s.term}", объявлений было: ${s.allAdsCount}`, 'info');
+        // Восстанавливаем счётчик allAds как пустой — данные уже в resumeSeen
+        allAds = new Array(s.allAdsCount); // только для счётчика
+      }
+    } catch(e) { log('Не удалось загрузить прогресс, начинаем заново', 'warn'); isResume = false; }
+  }
+
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('btnResume').style.display = 'none';
+  document.getElementById('resumeBanner').classList.remove('visible');
+  document.getElementById('progressWrap').classList.add('active');
+  document.getElementById('btnControls').classList.add('active');
+  document.getElementById('btnPause').textContent = '⏸ Приостановить';
+  document.getElementById('btnPause').style.background = '';
+  document.getElementById('btnPause').style.borderColor = '';
+  document.getElementById('btnPause').style.color = '';
+  document.getElementById('results').classList.remove('active');
+  document.getElementById('log').innerHTML = '';
+  if (!isResume) document.getElementById('tableBody').innerHTML = '';
+  setProgress(0);
+  if (!isResume) { allAds = []; resumeSeen = {}; }
+  totalRaw=0; pagesCollected=0;
+  _isPaused = false; _isStopped = false;
+  initLiveFeed();
+  window._rateLimitRetries = 0;
+
+  log('Запуск сбора...','info');
+  log(`Страна: ${country} | Статус: ${status} | Медиа: ${media}`,'info');
+  if (lang) log(`Языковой фильтр: ${lang}`,'info');
+  if (dateFrom||dateTo) log(`Период: ${dateFrom||'—'} → ${dateTo||'—'}`,'info');
+
+  for (let ki = resumeKwIndex; ki < keywords.length; ki++) {
+    const term = keywords[ki];
+    log(`Поиск: "${term}"`, 'info');
+    let cursor  = (isResume && ki === resumeKwIndex) ? resumeCursor : null;
+    let pageNum = 0;
+
+    while (true) {
+      pageNum++; pagesCollected++;
+      log(`  Стр.${pageNum} (собрано: ${allAds.length})`);
+      let data;
+      try {
+        data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor);
+      } catch(e) {
+        log('Ошибка сети: '+e.message+' — повтор через 30 сек...','warn');
+        saveResumeState(ki, term, cursor, allAds, resumeSeen);
+        await new Promise(r=>setTimeout(r,30000));
+        try { data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor); }
+        catch(e2) {
+          log('Сеть недоступна. Прогресс сохранён — нажмите "Продолжить" когда появится интернет.','error');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          return;
+        }
+      }
+
+      if (data.error) {
+        const msg    = data.error.message || '';
+        const code   = data.error.code || 0;
+        const subcode = data.error.error_subcode || 0;
+        log(`API ошибка [${code}/${subcode}]: ${msg}`, 'error');
+
+        const isTokenError = code === 190 || code === 102 || code === 104
+          || ['token','session','oauth','invalid credentials'].some(x => msg.toLowerCase().includes(x));
+        const isPermError  = code === 10 || code === 200 || code === 2332002
+          || ['permission','ads_read'].some(x => msg.toLowerCase().includes(x));
+        const isRateLimit  = code === 4 || code === 17 || code === 32 || code === 613
+          || ['too many','retry','rate limit','unexpected'].some(x => msg.toLowerCase().includes(x));
+
+        if (isTokenError) {
+          document.getElementById('tokenHintBox').classList.add('visible');
+          document.getElementById('tokenMeta').className = 'token-meta warn';
+          document.getElementById('tokenMeta').textContent = '⚠ Токен истёк или недействителен';
+          log('⚠ Токен истёк. Прогресс сохранён — обновите токен и нажмите "Продолжить".', 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          return;
+        } else if (isPermError) {
+          document.getElementById('tokenHintBox').classList.add('visible');
+          document.getElementById('tokenMeta').className = 'token-meta warn';
+          document.getElementById('tokenMeta').textContent = '⚠ Нет разрешения ads_read';
+          log('⚠ Нет разрешения ads_read — пересоздайте токен.', 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          return;
+        } else if (isRateLimit) {
+          const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
+          window._rateLimitRetries = (window._rateLimitRetries || 0) + 1;
+          const actualPause = Math.min(pauseSec * window._rateLimitRetries, 1200);
+          log(`⏳ Rate limit (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          for (let sec = actualPause; sec > 0; sec--) {
+            await new Promise(r => setTimeout(r, 1000));
+            if (sec % 30 === 0 || sec <= 10) log(`⏳ Продолжение через ${sec} сек...`, 'warn');
+          }
+          log('▶ Продолжаем...', 'info');
+          continue;
+        } else {
+          log('⚠ Неизвестная ошибка API: ' + msg, 'error');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          break;
+        }
+      }
+
+      const ads = data.data||[];
+      if (ads.length > 0 && pageNum === 1) {
+        document.getElementById('tokenHintBox').classList.remove('visible');
+        document.getElementById('tokenMeta').className = 'token-meta ok';
+        document.getElementById('tokenMeta').textContent = '✓ Токен активен — данные поступают';
+        log('✓ Токен работает, данные поступают', 'success');
+      } else if (ads.length === 0 && pageNum === 1) {
+        log('Страница 1 пустая — нет объявлений по данному запросу', 'warn');
+      }
+
+      // Обрабатываем объявления и накапливаем в resumeSeen
+      for (const ad of ads) {
+        const bodies = ad.ad_creative_bodies||[];
+        const titles = ad.ad_creative_link_titles||[];
+        const text = [...bodies,...titles].join(' ');
+        if (lang && !text.trim()) continue;
+        if (!matchesLanguage(text,lang)) continue;
+        const pid = ad.page_id||ad.id;
+        const contacts = extractContacts(ad, text);
+        const imp = ad.impressions||{}, spd = ad.spend||{};
+        if (!resumeSeen[pid]) {
+          resumeSeen[pid] = {
+            page_id:pid, page_name:ad.page_name||'—',
+            platforms:(ad.publisher_platforms||[]).join(', '),
+            start_date:(ad.ad_delivery_start_time||'').slice(0,10),
+            stop_date:(ad.ad_delivery_stop_time||'').slice(0,10),
+            text:text.slice(0,200)+(text.length>200?'...':''),
+            snapshot_url:ad.ad_snapshot_url||'',
+            impressions:imp.lower_bound?`${imp.lower_bound}–${imp.upper_bound}`:'—',
+            spend:spd.lower_bound?`${spd.lower_bound}–${spd.upper_bound} ${ad.currency||''}`:'—',
+            ...contacts, ad_count:1
+          };
+        } else { resumeSeen[pid].ad_count++; }
+      }
+
+      allAds = allAds.concat(ads);
+      addLiveRows(ads);
+      window._rateLimitRetries = 0;
+      setProgress(Math.min(maxAds?(allAds.length/maxAds)*80:pageNum*8, 80));
+
+      if (maxAds && allAds.length >= maxAds) {
+        log('Лимит объявлений достигнут','warn'); break;
+      }
+      const nc = data.paging?.cursors?.after;
+      if (!nc || !ads.length) break;
+      cursor = nc;
+
+      // Сохраняем прогресс после каждой успешной страницы
+      saveResumeState(ki, term, cursor, allAds, resumeSeen);
+
+      const delay = parseInt(document.getElementById('reqDelay')?.value) || 2000;
+      log(`  ⏱ Пауза ${delay/1000} сек...`);
+      await new Promise(r=>setTimeout(r,delay));
+
+      // Проверка паузы — ждём пока не нажмут "Продолжить"
+      while (_isPaused) {
+        await new Promise(r=>setTimeout(r,500));
+      }
+      // Проверка остановки
+      if (_isStopped) break;
+    }
+    log(`  Найдено: ${allAds.length}`,'success');
+    isResume = false;
+    if (_isStopped) break;
+  }
+
+  totalRaw = allAds.length;
+  log('Обработка...','info');
+  setProgress(88);
+  document.getElementById('btnControls').classList.remove('active');
+  collectedData = Object.values(resumeSeen);
+  setProgress(100);
+  clearResumeState(); // успешно завершили — очищаем сохранённый прогресс
+
+  // ---- Second pass: enrich with Facebook page contacts ----
+  if (collectedData.length > 0) {
+    log(`🔍 Второй проход: обогащение контактами из Facebook-страниц (${collectedData.length} страниц)...`, 'info');
+    setProgress(92);
+    let enriched = 0;
+    const batchSize = 10;
+    for (let i = 0; i < collectedData.length; i += batchSize) {
+      const batch = collectedData.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (row) => {
+        if (!row.page_id) return;
+        const extra = await fetchPageContacts(token, row.page_id);
+        if (extra.instagram && !row.instagram) { row.instagram = extra.instagram; enriched++; }
+        if (extra.telegram && !row.telegram) { row.telegram = extra.telegram; enriched++; }
+        if (extra.website && !row.website) { row.website = extra.website; enriched++; }
+      }));
+      setProgress(92 + Math.round((i / collectedData.length) * 6));
+      await new Promise(r => setTimeout(r, 150));
+    }
+    log(`✅ Обогащено контактов: +${enriched} из Facebook-страниц`, 'success');
+  }
+
+  if (!collectedData.length) {
+    if (totalRaw === 0) {
+      document.getElementById('tokenHintBox').classList.add('visible');
+      log('Ничего не найдено. Проверьте: 1) токен актуален и имеет ads_read, 2) ключевые слова есть в рекламе по выбранной стране, 3) период дат корректен.','warn');
+    } else {
+      log(`Найдено ${totalRaw} объявлений из API, но все отфильтрованы языковым фильтром. Попробуйте выбрать "Все языки".`, 'warn');
+    }
+    document.getElementById('btnRun').disabled=false; return;
+  }
+  log(`✅ Рекламодателей: ${collectedData.length}`,'success');
+
+  document.getElementById('statAdvertisers').textContent = collectedData.length;
+  document.getElementById('statAds').textContent = collectedData.reduce((s,r)=>s+r.ad_count,0);
+  document.getElementById('statTotal').textContent = totalRaw;
+  document.getElementById('statPages').textContent = pagesCollected;
+
+  const langEl=document.getElementById('adLanguage'), platEl=document.getElementById('platform');
+  const cntry=document.getElementById('country'), statEl=document.getElementById('adStatus');
+  const tags = [
+    `🌍 ${cntry.options[cntry.selectedIndex].text}`,
+    `🔤 ${langEl.value?langEl.options[langEl.selectedIndex].text:'Все языки'}`,
+    `📱 ${platEl.value?platEl.options[platEl.selectedIndex].text:'Все платформы'}`,
+    `📡 ${statEl.options[statEl.selectedIndex].text}`,
+    dateFrom?`📅 от ${dateFrom}`:null,
+    dateTo?`📅 до ${dateTo}`:null,
+  ].filter(Boolean);
+  document.getElementById('summaryRow').innerHTML = tags.map(t=>`<span class="summary-tag">${t}</span>`).join('');
+
+  // Sort by contact priority: Instagram > Telegram > Website > Facebook > rest
+  collectedData.sort((a, b) => {
+    const priority = r => {
+      if (r.instagram) return 0;
+      if (r.telegram)  return 1;
+      if (r.website)   return 2;
+      if (r.fb_page)   return 3;
+      if (r.snapshot_url) return 4;
+      return 5;
+    };
+    return priority(a) - priority(b);
+  });
+
+  const tbody = document.getElementById('tableBody');
+  collectedData.forEach((row,i)=>{
+    const tr = document.createElement('tr');
+    const plats = row.platforms.split(', ').filter(Boolean).map(p=>`<span class="platform-tag">${p}</span>`).join('');
+    const mkLink = (url, label) => url ? `<a href="${url}" target="_blank" style="color:#818cf8;font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;white-space:nowrap;">${label}</a>` : '<span style="color:var(--muted)">—</span>';
+    tr.innerHTML = `
+      <td>${i+1}</td>
+      <td title="${row.page_name}">${row.page_name}</td>
+      <td>${plats||'—'}</td>
+      <td>${row.start_date||'—'}</td>
+      <td><span class="count-badge">${row.ad_count}</span></td>
+      <td class="link-cell">${mkLink(row.instagram, '→ Instagram')}</td>
+      <td class="link-cell">${mkLink(row.telegram, '→ Telegram')}</td>
+      <td class="link-cell">${row.website ? mkLink(row.website, row.website.replace(/https?:\/\//,'').slice(0,25)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="link-cell">${mkLink(row.fb_page, '→ Facebook')}</td>
+      <td class="link-cell">${mkLink(row.snapshot_url, '→ Открыть')}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('results').classList.add('active');
+  document.getElementById('btnRun').disabled=false;
+  document.getElementById('btnPush').disabled = false;
+}
+
+function downloadExcel() {
+  if (!collectedData.length) return;
+  const langEl=document.getElementById('adLanguage'), platEl=document.getElementById('platform');
+  const cntry=document.getElementById('country'), statEl=document.getElementById('adStatus');
+  const dateFrom=document.getElementById('dateFrom').value, dateTo=document.getElementById('dateTo').value;
+
+  const wb = XLSX.utils.book_new();
+  const wsData = [['№','Название страницы','Платформы','Дата начала','Дата окончания','Instagram','Telegram','Сайт','Facebook','Объявление','Охват','Расходы','Объявлений','Текст','ID']];
+  collectedData.forEach((r,i)=>wsData.push([i+1,r.page_name,r.platforms,r.start_date,r.stop_date,r.instagram||'',r.telegram||'',r.website||'',r.fb_page||'',r.snapshot_url,r.impressions,r.spend,r.ad_count,r.text,r.page_id]));
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:5},{wch:28},{wch:16},{wch:12},{wch:12},{wch:30},{wch:28},{wch:30},{wch:30},{wch:30},{wch:18},{wch:18},{wch:10},{wch:50},{wch:18}];
+  XLSX.utils.book_append_sheet(wb,ws,'Рекламодатели');
+
+  const fs = [
+    ['Параметр','Значение'],
+    ['Дата сбора',new Date().toLocaleString('ru')],
+    ['Страна',cntry.options[cntry.selectedIndex].text],
+    ['Язык',langEl.value?langEl.options[langEl.selectedIndex].text:'Все языки'],
+    ['Платформа',platEl.value?platEl.options[platEl.selectedIndex].text:'Все платформы'],
+    ['Статус',statEl.options[statEl.selectedIndex].text],
+    ['Период с',dateFrom||'—'],['Период по',dateTo||'—'],
+    ['Ключевые слова',keywords.join(', ')],[''],
+    ['Рекламодателей',collectedData.length],
+    ['Объявлений',collectedData.reduce((s,r)=>s+r.ad_count,0)],
+    ['Из API',totalRaw],['API запросов',pagesCollected],
+  ];
+  const ws2=XLSX.utils.aoa_to_sheet(fs);
+  ws2['!cols']=[{wch:25},{wch:30}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Параметры сбора');
+
+  XLSX.writeFile(wb,`ads_${cntry.value}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+// ====== GOOGLE SHEETS INTEGRATION ======
+
+const GS_TOKEN_KEY = 'gs_access_token';
+const GS_SETTINGS_KEY = 'gs_settings';
+let gsAccessToken = null;
+
+function saveGsSettings() {
+  localStorage.setItem(GS_SETTINGS_KEY, JSON.stringify({
+    clientId: document.getElementById('gClientId').value.trim(),
+    sheetId:  document.getElementById('gSheetId').value.trim(),
+    sheetName: document.getElementById('gSheetName').value.trim() || 'Лист1',
+  }));
+}
+
+function loadGsSettings() {
+  const raw = localStorage.getItem(GS_SETTINGS_KEY);
+  if (!raw) return;
+  const s = JSON.parse(raw);
+  document.getElementById('gClientId').value  = s.clientId  || '';
+  document.getElementById('gSheetId').value   = s.sheetId   || '';
+  document.getElementById('gSheetName').value = s.sheetName || 'Лист1';
+}
+
+function setGsStatus(msg, type='') {
+  const el = document.getElementById('gsStatus');
+  const txt = document.getElementById('gsStatusText');
+  el.className = 'gs-status' + (type ? ' ' + type : '');
+  txt.textContent = msg;
+}
+
+function gsLogin() {
+  const clientId = document.getElementById('gClientId').value.trim();
+  if (!clientId) { alert('Введите Google Client ID!'); return; }
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: window.location.href.split('?')[0].split('#')[0],
+    response_type: 'token',
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    prompt: 'select_account',
+  });
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+}
+
+function gsLogout() {
+  gsAccessToken = null;
+  localStorage.removeItem(GS_TOKEN_KEY);
+  setGsStatus('Не подключено');
+  document.getElementById('btnGsLogin').style.display = '';
+  document.getElementById('btnGsLogout').style.display = 'none';
+}
+
+function checkGsToken() {
+  // Check URL hash for token (after OAuth redirect)
+  const hash = window.location.hash;
+  if (hash && hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.substring(1));
+    const token = params.get('access_token');
+    if (token) {
+      gsAccessToken = token;
+      localStorage.setItem(GS_TOKEN_KEY, token);
+      window.history.replaceState(null, '', window.location.pathname);
+      setGsStatus('✓ Подключено к Google', 'connected');
+      document.getElementById('btnGsLogin').style.display = 'none';
+      document.getElementById('btnGsLogout').style.display = '';
+      showToast('Google Sheets подключён!');
+      return;
+    }
+  }
+  // Check saved token
+  const saved = localStorage.getItem(GS_TOKEN_KEY);
+  if (saved) {
+    gsAccessToken = saved;
+    setGsStatus('✓ Подключено (токен из памяти)', 'connected');
+    document.getElementById('btnGsLogin').style.display = 'none';
+    document.getElementById('btnGsLogout').style.display = '';
+  }
+}
+
+function extractIgUsername(url) {
+  if (!url) return null;
+  const m = url.match(/instagram\.com\/([a-zA-Z0-9_.]+)/i);
+  return m ? m[1].toLowerCase().replace(/\/+$/, '') : null;
+}
+
+function extractTgUsername(url) {
+  if (!url) return null;
+  const m = url.match(/(?:t\.me|telegram\.me)\/([a-zA-Z0-9_]+)/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
+async function pushToSheets() {
+  if (!collectedData.length) { alert('Сначала запустите сбор!'); return; }
+  if (!gsAccessToken) { alert('Сначала войдите через Google!'); return; }
+
+  const sheetId   = document.getElementById('gSheetId').value.trim();
+  const sheetName = document.getElementById('gSheetName').value.trim() || 'Лист1';
+  if (!sheetId) { alert('Введите ID таблицы!'); return; }
+
+  const btn = document.getElementById('btnPush');
+  const resultEl = document.getElementById('pushResult');
+  btn.disabled = true;
+  btn.textContent = '⏳ Загружаем таблицу...';
+  resultEl.className = 'push-result';
+
+  try {
+    // 1. Read existing sheet to get all Instagram usernames and last row
+    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A:J`;
+    const readRes = await fetch(readUrl, {
+      headers: { Authorization: 'Bearer ' + gsAccessToken }
+    });
+    if (!readRes.ok) {
+      const err = await readRes.json();
+      throw new Error(err.error?.message || 'Ошибка чтения таблицы');
+    }
+    const readData = await readRes.json();
+    const existingRows = readData.values || [];
+    const lastRow = existingRows.length;
+
+    // Collect existing Instagram usernames (col F = index 5) and Telegram (col A = index 0)
+    const existingIg = new Set();
+    const existingTg = new Set();
+    const existingSites = new Set();
+    for (const row of existingRows) {
+      const igUrl = row[5] || '';
+      const tgUrl = row[0] || '';
+      const siteUrl = row[9] || '';
+      const igUser = extractIgUsername(igUrl);
+      const tgUser = extractTgUsername(tgUrl);
+      if (igUser) existingIg.add(igUser);
+      if (tgUser) existingTg.add(tgUser);
+      if (siteUrl) existingSites.add(siteUrl.trim().toLowerCase());
+    }
+
+    // 2. Filter new rows — skip if Instagram already exists
+    const newRows = [];
+    for (const row of collectedData) {
+      const igUser = extractIgUsername(row.instagram);
+      const tgUser = extractTgUsername(row.telegram);
+
+      // Skip if Instagram already in table (primary dedup key)
+      if (igUser && existingIg.has(igUser)) continue;
+      // Skip if no contacts at all
+      if (!row.instagram && !row.telegram && !row.website) continue;
+
+      newRows.push(row);
+      // Add to sets so duplicates within new batch are also caught
+      if (igUser) existingIg.add(igUser);
+      if (tgUser) existingTg.add(tgUser);
+    }
+
+    if (!newRows.length) {
+      resultEl.className = 'push-result visible';
+      resultEl.textContent = '✓ Нет новых данных — все Instagram уже есть в таблице';
+      btn.disabled = false;
+      btn.textContent = '📤 Добавить новые данные в таблицу';
+      return;
+    }
+
+    btn.textContent = `⏳ Добавляем ${newRows.length} строк...`;
+
+    // 3. Build rows to append: empty row separator + new data rows
+    // Columns: A=Telegram, B=Цена, C=Раздел, D=Себе, E=Название, F=Instagram, G=, H=, I=Источник, J=Сайт
+    const toAppend = [
+      Array(10).fill(''), // empty separator row
+    ];
+    for (const row of newRows) {
+      toAppend.push([
+        row.telegram  || '',  // A - Telegram
+        '',                    // B - Цена (пусто)
+        '',                    // C - Раздел (пусто)
+        '',                    // D - Себе (пусто)
+        row.page_name || '',  // E - Название
+        row.instagram || '',  // F - Instagram
+        '',                    // G - Отказали/Сотрудничаем
+        '',                    // H - Связывались
+        '',                    // I - Источник (пусто)
+        row.website   || '',  // J - Сайт
+      ]);
+    }
+
+    // 4. Append values
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A${lastRow + 1}:J${lastRow + toAppend.length}?valueInputOption=USER_ENTERED`;
+    const appendRes = await fetch(appendUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer ' + gsAccessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values: toAppend }),
+    });
+    if (!appendRes.ok) {
+      const err = await appendRes.json();
+      throw new Error(err.error?.message || 'Ошибка записи');
+    }
+
+    // 5. Apply green fill #b7e1cd to new data rows (skip the empty separator row)
+    const dataStartRow = lastRow + 2; // +1 for separator, +1 for 1-based index
+    const dataEndRow   = lastRow + toAppend.length;
+
+    const batchUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}:batchUpdate`;
+
+    // Get sheet GID first
+    const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties`, {
+      headers: { Authorization: 'Bearer ' + gsAccessToken }
+    });
+    const metaData = await metaRes.json();
+    const sheetObj = metaData.sheets?.find(s => s.properties.title === sheetName);
+    const sheetGid = sheetObj ? sheetObj.properties.sheetId : 0;
+
+    await fetch(batchUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + gsAccessToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        requests: [{
+          repeatCell: {
+            range: {
+              sheetId: sheetGid,
+              startRowIndex: dataStartRow - 1,
+              endRowIndex: dataEndRow,
+              startColumnIndex: 0,
+              endColumnIndex: 10,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 0.718, green: 0.882, blue: 0.804 }, // #b7e1cd
+              }
+            },
+            fields: 'userEnteredFormat.backgroundColor',
+          }
+        }]
+      })
+    });
+
+    resultEl.className = 'push-result visible';
+    resultEl.innerHTML = `✅ Готово!<br>
+      Добавлено строк: <strong>${newRows.length}</strong><br>
+      Пропущено дублей Instagram: <strong>${collectedData.length - newRows.length}</strong><br>
+      Строки в таблице: <strong>${dataStartRow}–${dataEndRow}</strong> (заливка #b7e1cd)`;
+    showToast(`✅ Добавлено ${newRows.length} строк в Google Sheets`);
+
+  } catch(e) {
+    resultEl.className = 'push-result visible error';
+    resultEl.textContent = '❌ Ошибка: ' + e.message;
+    console.error(e);
+  }
+
+  btn.disabled = false;
+  btn.textContent = '📤 Добавить новые данные в таблицу';
+}
+
+// ====== LONG-LIVED TOKEN ======
+
+const LLT_SETTINGS_KEY = 'llt_settings';
+
+function saveLltSettings() {
+  localStorage.setItem(LLT_SETTINGS_KEY, JSON.stringify({
+    appId:     document.getElementById('appId').value.trim(),
+    appSecret: document.getElementById('appSecret').value.trim(),
+  }));
+}
+
+function loadLltSettings() {
+  const raw = localStorage.getItem(LLT_SETTINGS_KEY);
+  if (!raw) return;
+  const s = JSON.parse(raw);
+  document.getElementById('appId').value     = s.appId     || '';
+  document.getElementById('appSecret').value = s.appSecret || '';
+}
+
+function toggleVisEl(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function parseTokenExpiry(token) {
+  // JWT tokens have expiry in payload
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]));
+      if (payload.exp) return new Date(payload.exp * 1000);
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function checkTokenExpiry(token) {
+  if (!token || token.length < 20) return;
+  try {
+    const r = await fetch(`https://graph.facebook.com/debug_token?input_token=${token}&access_token=${token}`);
+    const data = await r.json();
+    const expEl = document.getElementById('tokenExpire');
+    if (data.data) {
+      const d = data.data;
+      if (!d.is_valid) {
+        expEl.className = 'token-expire err';
+        expEl.textContent = '✗ Токен недействителен';
+        return;
+      }
+      if (d.expires_at) {
+        const exp = new Date(d.expires_at * 1000);
+        const now = new Date();
+        const diffH = Math.round((exp - now) / 3600000);
+        const diffD = Math.round(diffH / 24);
+        if (diffH < 2) {
+          expEl.className = 'token-expire err';
+          expEl.textContent = `⚠ Токен истекает через ${diffH} ч (${exp.toLocaleString('ru')})`;
+        } else if (diffD < 3) {
+          expEl.className = 'token-expire warn';
+          expEl.textContent = `⏱ Токен действителен ещё ${diffH} ч`;
+        } else {
+          expEl.className = 'token-expire ok';
+          expEl.textContent = `✓ Токен действителен до ${exp.toLocaleDateString('ru')} (${diffD} дн.)`;
+        }
+      } else if (d.expires_at === 0) {
+        expEl.className = 'token-expire ok';
+        expEl.textContent = '✓ Бессрочный токен';
+      }
+    }
+  } catch(e) {}
+}
+
+async function getLongLivedToken() {
+  const token    = document.getElementById('token').value.trim();
+  const appId    = document.getElementById('appId').value.trim();
+  const appSecret = document.getElementById('appSecret').value.trim();
+  const resultEl = document.getElementById('lltResult');
+
+  if (!token)     { resultEl.className='llt-result err'; resultEl.textContent='⚠ Сначала введите краткосрочный токен выше'; return; }
+  if (!appId)     { resultEl.className='llt-result err'; resultEl.textContent='⚠ Введите App ID'; return; }
+  if (!appSecret) { resultEl.className='llt-result err'; resultEl.textContent='⚠ Введите App Secret'; return; }
+
+  resultEl.className = 'llt-result';
+  resultEl.textContent = '⏳ Получаем долгосрочный токен...';
+
+  try {
+    const url = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${token}`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.error) {
+      resultEl.className = 'llt-result err';
+      resultEl.textContent = '✗ Ошибка: ' + data.error.message;
+      return;
+    }
+
+    if (data.access_token) {
+      // Save and apply the new long-lived token
+      document.getElementById('token').value = data.access_token;
+      localStorage.setItem('meta_ad_token', data.access_token);
+      document.getElementById('tokenSaved').classList.add('visible');
+      document.getElementById('tokenMeta').className = 'token-meta ok';
+      document.getElementById('tokenMeta').textContent = '✓ Долгосрочный токен сохранён';
+
+      const expiresSec = data.expires_in || 0;
+      const expiresDays = Math.round(expiresSec / 86400);
+      resultEl.className = 'llt-result ok';
+      resultEl.textContent = `✅ Готово! Токен действителен ${expiresDays > 0 ? expiresDays + ' дней' : 'без ограничений'}. Он уже вставлен в поле выше.`;
+
+      document.getElementById('lltBox').classList.add('success');
+      await checkTokenExpiry(data.access_token);
+      showToast(`✅ Долгосрочный токен получен на ${expiresDays} дней`);
+    }
+  } catch(e) {
+    resultEl.className = 'llt-result err';
+    resultEl.textContent = '✗ Ошибка сети: ' + e.message;
+  }
+}
+
+// ====== INIT (runs after all functions are defined) ======
+loadSettings();
+loadGsSettings();
+loadLltSettings();
+checkGsToken();
+checkResumeState();
+
+// Load saved token
+(function() {
+  const saved = localStorage.getItem('meta_ad_token');
+  if (saved) {
+    document.getElementById('token').value = saved;
+    document.getElementById('tokenSaved').classList.add('visible');
+    document.getElementById('tokenMeta').className = 'token-meta ok';
+    document.getElementById('tokenMeta').textContent = '✓ Токен загружен из памяти';
+    checkTokenExpiry(saved);
+  }
+})();
+
+</script>
+</body>
+</html>
