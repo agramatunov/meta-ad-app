@@ -173,6 +173,22 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.5); curso
   display:none; transition:all .3s;
 }
 .btn-resume:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
+.btn-controls {
+  display:none; gap:10px; margin-top:10px;
+}
+.btn-controls.active { display:flex; }
+.btn-pause {
+  flex:1; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.4);
+  color:#fcd34d; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; transition:all .3s;
+}
+.btn-pause:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
+.btn-stop {
+  flex:1; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+  color:#f87171; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; transition:all .3s;
+}
+.btn-stop:hover { background:rgba(239,68,68,.22); transform:translateY(-1px); }
 .resume-banner {
   display:none; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.3);
   border-radius:12px; padding:14px 18px; margin-top:10px;
@@ -584,6 +600,10 @@ tr:hover td { background:rgba(79,110,247,.04); }
   </button>
 
   <div class="progress-wrap" id="progressWrap">
+    <div class="btn-controls" id="btnControls">
+      <button type="button" class="btn-pause" id="btnPause" onclick="togglePause()">⏸ Приостановить</button>
+      <button type="button" class="btn-stop" id="btnStop" onclick="stopCollection()">⏹ Завершить сбор</button>
+    </div>
     <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
     <div class="log" id="log"></div>
   </div>
@@ -941,6 +961,33 @@ function log(msg, type='') {
 function setProgress(p) { document.getElementById('progressBar').style.width = p+'%'; }
 
 let collectedData=[], totalRaw=0, pagesCollected=0;
+let _isPaused = false, _isStopped = false;
+
+function togglePause() {
+  _isPaused = !_isPaused;
+  const btn = document.getElementById('btnPause');
+  if (_isPaused) {
+    btn.textContent = '▶ Продолжить';
+    btn.style.background = 'rgba(34,197,94,.15)';
+    btn.style.borderColor = 'rgba(34,197,94,.4)';
+    btn.style.color = '#4ade80';
+    log('⏸ Сбор приостановлен. Нажми «Продолжить» чтобы возобновить.', 'warn');
+  } else {
+    btn.textContent = '⏸ Приостановить';
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    log('▶ Сбор возобновлён.', 'info');
+  }
+}
+
+function stopCollection() {
+  if (!confirm('Завершить сбор? Уже собранные данные будут показаны.')) return;
+  _isStopped = true;
+  _isPaused = false;
+  log('⏹ Сбор остановлен пользователем.', 'warn');
+  document.getElementById('btnControls').classList.remove('active');
+}
 
 // ============================================================
 // 💾 RESUME STATE — сохранение/восстановление прогресса
@@ -1081,12 +1128,18 @@ async function runCollection(isResume = false) {
   document.getElementById('btnResume').style.display = 'none';
   document.getElementById('resumeBanner').classList.remove('visible');
   document.getElementById('progressWrap').classList.add('active');
+  document.getElementById('btnControls').classList.add('active');
+  document.getElementById('btnPause').textContent = '⏸ Приостановить';
+  document.getElementById('btnPause').style.background = '';
+  document.getElementById('btnPause').style.borderColor = '';
+  document.getElementById('btnPause').style.color = '';
   document.getElementById('results').classList.remove('active');
   document.getElementById('log').innerHTML = '';
   if (!isResume) document.getElementById('tableBody').innerHTML = '';
   setProgress(0);
   if (!isResume) { allAds = []; resumeSeen = {}; }
   totalRaw=0; pagesCollected=0;
+  _isPaused = false; _isStopped = false;
   initLiveFeed();
   window._rateLimitRetries = 0;
 
@@ -1225,14 +1278,23 @@ async function runCollection(isResume = false) {
       const delay = parseInt(document.getElementById('reqDelay')?.value) || 2000;
       log(`  ⏱ Пауза ${delay/1000} сек...`);
       await new Promise(r=>setTimeout(r,delay));
+
+      // Проверка паузы — ждём пока не нажмут "Продолжить"
+      while (_isPaused) {
+        await new Promise(r=>setTimeout(r,500));
+      }
+      // Проверка остановки
+      if (_isStopped) break;
     }
     log(`  Найдено: ${allAds.length}`,'success');
-    isResume = false; // для следующих ключевых слов начинаем с нуля
+    isResume = false;
+    if (_isStopped) break;
   }
 
   totalRaw = allAds.length;
   log('Обработка...','info');
   setProgress(88);
+  document.getElementById('btnControls').classList.remove('active');
   collectedData = Object.values(resumeSeen);
   setProgress(100);
   clearResumeState(); // успешно завершили — очищаем сохранённый прогресс
