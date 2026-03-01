@@ -1318,7 +1318,8 @@ async function runCollection(isResume = false) {
       log(`Найдено ${totalRaw} объявлений из API, но все отфильтрованы языковым фильтром. Попробуйте выбрать "Все языки".`, 'warn');
     }
     document.getElementById('btnRun').disabled=false;
-  document.getElementById('btnPauseToggle').style.display = 'none'; return;
+  document.getElementById('btnPauseToggle').style.display = 'none';
+  return;
   }
   log(`✅ Рекламодателей: ${collectedData.length}`,'success');
 
