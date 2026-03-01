@@ -1064,26 +1064,57 @@ async function fetchPageContacts(token, pageId) {
   try {
     const p = new URLSearchParams({
       access_token: token,
-      fields: 'website,link,instagram_business_account{username},connected_instagram_account{username}',
+      fields: [
+        'website','link','about','bio','description','emails',
+        'instagram_business_account{username,website_url,biography}',
+        'connected_instagram_account{username,website_url,biography}',
+      ].join(','),
     });
     const r = await fetch(`https://graph.facebook.com/v19.0/${pageId}?${p}`);
     const data = await r.json();
     if (data.error) return {};
     const result = {};
-    const allText = [data.website||'', data.link||''].join(' ');
 
-    // Telegram from website or link field
+    const igAcc = data.instagram_business_account || data.connected_instagram_account;
+    const allText = [
+      data.website     || '',
+      data.link        || '',
+      data.about       || '',
+      data.bio         || '',
+      data.description || '',
+      (data.emails || []).join(' '),
+      igAcc?.biography   || '',
+      igAcc?.website_url || '',
+    ].join(' ');
+
+    // --- Instagram ---
+    if (igAcc?.username) {
+      result.instagram = 'https://instagram.com/' + igAcc.username;
+    } else {
+      const igMatch = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,40})/i);
+      if (igMatch) result.instagram = 'https://instagram.com/' + igMatch[1];
+      else {
+        const atMatch = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,40})/);
+        if (atMatch) result.instagram = 'https://instagram.com/' + atMatch[1];
+      }
+    }
+
+    // --- Telegram ---
     const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
     if (tgMatch) result.telegram = 'https://t.me/' + tgMatch[1];
 
-    // Website (only if not telegram)
-    if (data.website && !/t\.me\/|telegram\.me\//i.test(data.website)) {
-      result.website = data.website;
+    // --- Website ---
+    const badDomains = /facebook\.com|instagram\.com|t\.me|telegram\.me|vk\.com|twitter\.com|x\.com/i;
+    if (data.website && !badDomains.test(data.website)) {
+      result.website = data.website.trim();
     }
-
-    // Instagram
-    const igAcc = data.instagram_business_account || data.connected_instagram_account;
-    if (igAcc && igAcc.username) result.instagram = 'https://instagram.com/' + igAcc.username;
+    if (!result.website && igAcc?.website_url && !badDomains.test(igAcc.website_url)) {
+      result.website = igAcc.website_url.trim();
+    }
+    if (!result.website) {
+      const urlMatch = allText.match(/https?:\/\/(?!(?:www\.)?(?:facebook|instagram|t\.me|telegram\.me|vk\.com|twitter|x\.com))[^\s"'<>]{5,80}/i);
+      if (urlMatch) result.website = urlMatch[0].replace(/[.,;)>]+$/, '');
+    }
 
     return result;
   } catch(e) {
@@ -1463,7 +1494,17 @@ function gsLogin() {
 function gsLogout() {
   gsAccessToken = null;
   localStorage.removeItem(GS_TOKEN_KEY);
+  localStorage.removeItem(GS_TOKEN_KEY + '_exp');
   setGsStatus('Не подключено');
+  document.getElementById('btnGsLogin').style.display = '';
+  document.getElementById('btnGsLogout').style.display = 'none';
+}
+
+function gsHandleAuthError() {
+  gsAccessToken = null;
+  localStorage.removeItem(GS_TOKEN_KEY);
+  localStorage.removeItem(GS_TOKEN_KEY + '_exp');
+  setGsStatus('⚠ Токен истёк — войдите снова', 'error');
   document.getElementById('btnGsLogin').style.display = '';
   document.getElementById('btnGsLogout').style.display = 'none';
 }
@@ -1474,9 +1515,12 @@ function checkGsToken() {
   if (hash && hash.includes('access_token')) {
     const params = new URLSearchParams(hash.substring(1));
     const token = params.get('access_token');
+    const expiresIn = parseInt(params.get('expires_in') || '3600');
     if (token) {
       gsAccessToken = token;
+      const expiresAt = Date.now() + expiresIn * 1000;
       localStorage.setItem(GS_TOKEN_KEY, token);
+      localStorage.setItem(GS_TOKEN_KEY + '_exp', expiresAt);
       window.history.replaceState(null, '', window.location.pathname);
       setGsStatus('✓ Подключено к Google', 'connected');
       document.getElementById('btnGsLogin').style.display = 'none';
@@ -1485,11 +1529,20 @@ function checkGsToken() {
       return;
     }
   }
-  // Check saved token
+  // Check saved token — verify it hasn't expired
   const saved = localStorage.getItem(GS_TOKEN_KEY);
+  const exp   = parseInt(localStorage.getItem(GS_TOKEN_KEY + '_exp') || '0');
   if (saved) {
+    if (exp && Date.now() > exp - 60000) {
+      // Token expired — clear it
+      localStorage.removeItem(GS_TOKEN_KEY);
+      localStorage.removeItem(GS_TOKEN_KEY + '_exp');
+      setGsStatus('⚠ Токен истёк — войдите снова', 'error');
+      return;
+    }
     gsAccessToken = saved;
-    setGsStatus('✓ Подключено (токен из памяти)', 'connected');
+    const minsLeft = exp ? Math.round((exp - Date.now()) / 60000) : '?';
+    setGsStatus(`✓ Подключено (осталось ~${minsLeft} мин)`, 'connected');
     document.getElementById('btnGsLogin').style.display = 'none';
     document.getElementById('btnGsLogout').style.display = '';
   }
@@ -1529,6 +1582,10 @@ async function pushToSheets() {
     });
     if (!readRes.ok) {
       const err = await readRes.json();
+      if (readRes.status === 401) {
+        gsHandleAuthError();
+        throw new Error('Токен Google истёк. Нажмите «Войти через Google» снова.');
+      }
       throw new Error(err.error?.message || 'Ошибка чтения таблицы');
     }
     const readData = await readRes.json();
