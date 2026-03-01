@@ -924,15 +924,27 @@ async function fetchPageContacts(token, pageId) {
   try {
     const p = new URLSearchParams({
       access_token: token,
-      fields: 'website,instagram_business_account{username},connected_instagram_account{username},fan_count,category',
+      fields: 'website,link,instagram_business_account{username},connected_instagram_account{username}',
     });
     const r = await fetch(`https://graph.facebook.com/v19.0/${pageId}?${p}`);
     const data = await r.json();
     if (data.error) return {};
     const result = {};
-    if (data.website) result.website = data.website;
+    const allText = [data.website||'', data.link||''].join(' ');
+
+    // Telegram from website or link field
+    const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
+    if (tgMatch) result.telegram = 'https://t.me/' + tgMatch[1];
+
+    // Website (only if not telegram)
+    if (data.website && !/t\.me\/|telegram\.me\//i.test(data.website)) {
+      result.website = data.website;
+    }
+
+    // Instagram
     const igAcc = data.instagram_business_account || data.connected_instagram_account;
     if (igAcc && igAcc.username) result.instagram = 'https://instagram.com/' + igAcc.username;
+
     return result;
   } catch(e) {
     return {};
@@ -975,8 +987,14 @@ async function runCollection() {
       pageNum++; pagesCollected++;
       log(`  Стр.${pageNum} (собрано: ${allAds.length})`);
       let data;
-      try { data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor); }
-      catch(e) { log('Ошибка сети: '+e.message,'error'); break; }
+      try {
+        data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor);
+      } catch(e) {
+        log('Ошибка сети: '+e.message+' — повтор через 15 сек...','warn');
+        await new Promise(r=>setTimeout(r,15000));
+        try { data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor); }
+        catch(e2) { log('Ошибка сети повторно: '+e2.message,'error'); break; }
+      }
       if (data.error) {
         const msg = data.error.message || '';
         const code = data.error.code || 0;
@@ -1085,6 +1103,7 @@ async function runCollection() {
         if (!row.page_id) return;
         const extra = await fetchPageContacts(token, row.page_id);
         if (extra.instagram && !row.instagram) { row.instagram = extra.instagram; enriched++; }
+        if (extra.telegram && !row.telegram) { row.telegram = extra.telegram; enriched++; }
         if (extra.website && !row.website) { row.website = extra.website; enriched++; }
       }));
       setProgress(92 + Math.round((i / collectedData.length) * 6));
