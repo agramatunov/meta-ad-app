@@ -173,6 +173,18 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.5); curso
   display:none; transition:all .3s;
 }
 .btn-resume:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
+.btn-pause {
+  width:100%; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+  color:#fca5a5; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; margin-top:8px;
+  display:none; transition:all .3s;
+}
+.btn-pause:hover { background:rgba(239,68,68,.22); transform:translateY(-1px); }
+.btn-pause.paused {
+  background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.35);
+  color:#86efac;
+}
+.btn-pause.paused:hover { background:rgba(34,197,94,.22); }
 .resume-banner {
   display:none; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.3);
   border-radius:12px; padding:14px 18px; margin-top:10px;
@@ -578,6 +590,9 @@ tr:hover td { background:rgba(79,110,247,.04); }
   <button class="btn-run" id="btnRun" onclick="runCollection(false)">
     🚀 Начать сбор по фильтрам
   </button>
+  <button class="btn-pause" id="btnPauseToggle" onclick="togglePause()">
+    ⏸ Приостановить сбор
+  </button>
   <div class="resume-banner" id="resumeBanner"></div>
   <button class="btn-resume" id="btnResume" onclick="runCollection(true)">
     ▶ Продолжить с места остановки
@@ -978,7 +993,32 @@ function clearResumeState() {
   document.getElementById('btnResume').style.display = 'none';
 }
 
-function checkResumeState() {
+// ============================================================
+// ⏸ PAUSE / RESUME during active collection
+// ============================================================
+let _isPaused = false;
+let _pauseResolve = null;
+
+function togglePause() {
+  const btn = document.getElementById('btnPauseToggle');
+  if (!_isPaused) {
+    _isPaused = true;
+    btn.textContent = '▶ Возобновить сбор';
+    btn.classList.add('paused');
+    log('⏸ Сбор приостановлен — нажмите "Возобновить" для продолжения', 'warn');
+  } else {
+    _isPaused = false;
+    btn.textContent = '⏸ Приостановить сбор';
+    btn.classList.remove('paused');
+    log('▶ Сбор возобновлён', 'info');
+    if (_pauseResolve) { _pauseResolve(); _pauseResolve = null; }
+  }
+}
+
+function waitIfPaused() {
+  if (!_isPaused) return Promise.resolve();
+  return new Promise(resolve => { _pauseResolve = resolve; });
+}
   try {
     const raw = localStorage.getItem(RESUME_KEY);
     if (!raw) return;
@@ -1089,6 +1129,11 @@ async function runCollection(isResume = false) {
   totalRaw=0; pagesCollected=0;
   initLiveFeed();
   window._rateLimitRetries = 0;
+  _isPaused = false;
+  const pauseBtn = document.getElementById('btnPauseToggle');
+  pauseBtn.style.display = 'block';
+  pauseBtn.textContent = '⏸ Приостановить сбор';
+  pauseBtn.classList.remove('paused');
 
   log('Запуск сбора...','info');
   log(`Страна: ${country} | Статус: ${status} | Медиа: ${media}`,'info');
@@ -1103,6 +1148,10 @@ async function runCollection(isResume = false) {
 
     while (true) {
       pageNum++; pagesCollected++;
+
+      // Ждём если пользователь нажал паузу
+      await waitIfPaused();
+
       log(`  Стр.${pageNum} (собрано: ${allAds.length})`);
       let data;
       try {
@@ -1117,6 +1166,7 @@ async function runCollection(isResume = false) {
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
+          document.getElementById('btnPauseToggle').style.display = 'none';
           return;
         }
       }
@@ -1142,6 +1192,7 @@ async function runCollection(isResume = false) {
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
+          document.getElementById('btnPauseToggle').style.display = 'none';
           return;
         } else if (isPermError) {
           document.getElementById('tokenHintBox').classList.add('visible');
@@ -1151,6 +1202,7 @@ async function runCollection(isResume = false) {
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
+          document.getElementById('btnPauseToggle').style.display = 'none';
           return;
         } else if (isRateLimit) {
           const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
@@ -1265,7 +1317,8 @@ async function runCollection(isResume = false) {
     } else {
       log(`Найдено ${totalRaw} объявлений из API, но все отфильтрованы языковым фильтром. Попробуйте выбрать "Все языки".`, 'warn');
     }
-    document.getElementById('btnRun').disabled=false; return;
+    document.getElementById('btnRun').disabled=false;
+  document.getElementById('btnPauseToggle').style.display = 'none'; return;
   }
   log(`✅ Рекламодателей: ${collectedData.length}`,'success');
 
@@ -1320,6 +1373,7 @@ async function runCollection(isResume = false) {
 
   document.getElementById('results').classList.add('active');
   document.getElementById('btnRun').disabled=false;
+  document.getElementById('btnPauseToggle').style.display = 'none';
   document.getElementById('btnPush').disabled = false;
 }
 
