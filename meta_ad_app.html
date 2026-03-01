@@ -166,6 +166,20 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.5); curso
 .btn-run:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 12px 40px rgba(79,110,247,.35); }
 .btn-run:disabled { opacity:.5; cursor:not-allowed; }
 .btn-run::after { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,.1),transparent); pointer-events:none; }
+.btn-resume {
+  width:100%; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.4);
+  color:#fcd34d; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; margin-top:8px;
+  display:none; transition:all .3s;
+}
+.btn-resume:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
+.resume-banner {
+  display:none; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.3);
+  border-radius:12px; padding:14px 18px; margin-top:10px;
+  font-family:'DM Mono',monospace; font-size:12px; color:#fcd34d; line-height:1.9;
+}
+.resume-banner.visible { display:block; }
+.resume-banner strong { color:#fef3c7; }
 .progress-wrap { display:none; margin-top:22px; }
 .progress-wrap.active { display:block; }
 .progress-bar-bg { background:var(--surface2); border:1px solid var(--border); border-radius:100px; height:5px; overflow:hidden; margin-bottom:14px; }
@@ -561,8 +575,12 @@ tr:hover td { background:rgba(79,110,247,.04); }
     2. Выберите своё приложение и добавьте разрешение <strong>ads_read</strong><br>
     3. Нажмите "Generate Access Token" и вставьте его выше
   </div>
-  <button class="btn-run" id="btnRun" onclick="runCollection()">
+  <button class="btn-run" id="btnRun" onclick="runCollection(false)">
     🚀 Начать сбор по фильтрам
+  </button>
+  <div class="resume-banner" id="resumeBanner"></div>
+  <button class="btn-resume" id="btnResume" onclick="runCollection(true)">
+    ▶ Продолжить с места остановки
   </button>
 
   <div class="progress-wrap" id="progressWrap">
@@ -924,6 +942,60 @@ function setProgress(p) { document.getElementById('progressBar').style.width = p
 
 let collectedData=[], totalRaw=0, pagesCollected=0;
 
+// ============================================================
+// 💾 RESUME STATE — сохранение/восстановление прогресса
+// ============================================================
+const RESUME_KEY = 'meta_ad_resume_v2';
+
+function saveResumeState(kwIndex, term, cursor, allAdsSnapshot, seenSnapshot) {
+  try {
+    const state = {
+      savedAt: new Date().toISOString(),
+      kwIndex, term, cursor,
+      allAdsCount: allAdsSnapshot.length,
+      seenData: seenSnapshot,
+      filters: {
+        token: document.getElementById('token').value.trim(),
+        country: document.getElementById('country').value,
+        lang: document.getElementById('adLanguage').value,
+        platform: document.getElementById('platform').value,
+        media: document.getElementById('mediaType').value,
+        status: document.getElementById('adStatus').value,
+        dateFrom: document.getElementById('dateFrom').value,
+        dateTo: document.getElementById('dateTo').value,
+        maxAds: document.getElementById('maxAds').value,
+        keywords: [...keywords],
+      }
+    };
+    localStorage.setItem(RESUME_KEY, JSON.stringify(state));
+  } catch(e) { console.warn('Не удалось сохранить прогресс:', e); }
+}
+
+function clearResumeState() {
+  localStorage.removeItem(RESUME_KEY);
+  document.getElementById('resumeBanner').classList.remove('visible');
+  document.getElementById('resumeBanner').innerHTML = '';
+  document.getElementById('btnResume').style.display = 'none';
+}
+
+function checkResumeState() {
+  try {
+    const raw = localStorage.getItem(RESUME_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    const dt = new Date(s.savedAt).toLocaleString('ru');
+    const pages = Object.keys(s.seenData || {}).length;
+    const banner = document.getElementById('resumeBanner');
+    banner.innerHTML =
+      `⏸ <strong>Незавершённый сбор</strong> от ${dt}<br>` +
+      `Ключевое слово: <strong>"${s.term}"</strong> | ` +
+      `Собрано объявлений: <strong>${s.allAdsCount}</strong> | ` +
+      `Уникальных страниц: <strong>${pages}</strong>`;
+    banner.classList.add('visible');
+    document.getElementById('btnResume').style.display = 'block';
+  } catch(e) { clearResumeState(); }
+}
+
 async function fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor) {
   const p = new URLSearchParams({
     access_token:token, ad_reached_countries:country,
@@ -972,7 +1044,7 @@ async function fetchPageContacts(token, pageId) {
   }
 }
 
-async function runCollection() {
+async function runCollection(isResume = false) {
   const token = document.getElementById('token').value.trim();
   if (!token) { alert('Введите Access Token!'); return; }
   if (!keywords.length) { alert('Добавьте ключевое слово!'); return; }
@@ -986,24 +1058,49 @@ async function runCollection() {
   const dateTo   = document.getElementById('dateTo').value;
   const maxAds   = parseInt(document.getElementById('maxAds').value)||0;
 
+  // --- Загружаем сохранённый прогресс если продолжаем ---
+  let resumeKwIndex = 0, resumeCursor = null, resumeSeen = {};
+  let allAds = [];
+
+  if (isResume) {
+    try {
+      const raw = localStorage.getItem(RESUME_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        resumeKwIndex = s.kwIndex || 0;
+        resumeCursor  = s.cursor  || null;
+        resumeSeen    = s.seenData || {};
+        log(`▶ Восстановлен прогресс: слово "${s.term}", объявлений было: ${s.allAdsCount}`, 'info');
+        // Восстанавливаем счётчик allAds как пустой — данные уже в resumeSeen
+        allAds = new Array(s.allAdsCount); // только для счётчика
+      }
+    } catch(e) { log('Не удалось загрузить прогресс, начинаем заново', 'warn'); isResume = false; }
+  }
+
   document.getElementById('btnRun').disabled = true;
+  document.getElementById('btnResume').style.display = 'none';
+  document.getElementById('resumeBanner').classList.remove('visible');
   document.getElementById('progressWrap').classList.add('active');
   document.getElementById('results').classList.remove('active');
   document.getElementById('log').innerHTML = '';
-  document.getElementById('tableBody').innerHTML = '';
+  if (!isResume) document.getElementById('tableBody').innerHTML = '';
   setProgress(0);
-  collectedData=[]; totalRaw=0; pagesCollected=0;
+  if (!isResume) { allAds = []; resumeSeen = {}; }
+  totalRaw=0; pagesCollected=0;
   initLiveFeed();
+  window._rateLimitRetries = 0;
 
   log('Запуск сбора...','info');
   log(`Страна: ${country} | Статус: ${status} | Медиа: ${media}`,'info');
   if (lang) log(`Языковой фильтр: ${lang}`,'info');
   if (dateFrom||dateTo) log(`Период: ${dateFrom||'—'} → ${dateTo||'—'}`,'info');
 
-  let allAds = [];
-  for (const term of keywords) {
+  for (let ki = resumeKwIndex; ki < keywords.length; ki++) {
+    const term = keywords[ki];
     log(`Поиск: "${term}"`, 'info');
-    let cursor=null, pageNum=0;
+    let cursor  = (isResume && ki === resumeKwIndex) ? resumeCursor : null;
+    let pageNum = 0;
+
     while (true) {
       pageNum++; pagesCollected++;
       log(`  Стр.${pageNum} (собрано: ${allAds.length})`);
@@ -1011,112 +1108,134 @@ async function runCollection() {
       try {
         data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor);
       } catch(e) {
-        log('Ошибка сети: '+e.message+' — повтор через 15 сек...','warn');
-        await new Promise(r=>setTimeout(r,15000));
+        log('Ошибка сети: '+e.message+' — повтор через 30 сек...','warn');
+        saveResumeState(ki, term, cursor, allAds, resumeSeen);
+        await new Promise(r=>setTimeout(r,30000));
         try { data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor); }
-        catch(e2) { log('Ошибка сети повторно: '+e2.message,'error'); break; }
+        catch(e2) {
+          log('Сеть недоступна. Прогресс сохранён — нажмите "Продолжить" когда появится интернет.','error');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          return;
+        }
       }
+
       if (data.error) {
-        const msg = data.error.message || '';
-        const code = data.error.code || 0;
+        const msg    = data.error.message || '';
+        const code   = data.error.code || 0;
         const subcode = data.error.error_subcode || 0;
         log(`API ошибка [${code}/${subcode}]: ${msg}`, 'error');
-        const isTokenError = msg.toLowerCase().includes('token')
-          || msg.toLowerCase().includes('session')
-          || msg.toLowerCase().includes('oauth')
-          || msg.toLowerCase().includes('invalid credentials')
-          || code === 190 || code === 102 || code === 104;
-        const isPermError = msg.toLowerCase().includes('permission')
-          || msg.toLowerCase().includes('ads_read')
-          || code === 10 || code === 200;
-        const isRateLimit = msg.toLowerCase().includes('unexpected')
-          || msg.toLowerCase().includes('retry')
-          || msg.toLowerCase().includes('too many')
-          || code === 4 || code === 17 || code === 32 || code === 613;
+
+        const isTokenError = code === 190 || code === 102 || code === 104
+          || ['token','session','oauth','invalid credentials'].some(x => msg.toLowerCase().includes(x));
+        const isPermError  = code === 10 || code === 200 || code === 2332002
+          || ['permission','ads_read'].some(x => msg.toLowerCase().includes(x));
+        const isRateLimit  = code === 4 || code === 17 || code === 32 || code === 613
+          || ['too many','retry','rate limit','unexpected'].some(x => msg.toLowerCase().includes(x));
+
         if (isTokenError) {
           document.getElementById('tokenHintBox').classList.add('visible');
-          document.getElementById('tokenSaved').classList.remove('visible');
           document.getElementById('tokenMeta').className = 'token-meta warn';
           document.getElementById('tokenMeta').textContent = '⚠ Токен истёк или недействителен';
-          log('⚠ Токен истёк — получите новый токен с разрешением ads_read', 'warn');
+          log('⚠ Токен истёк. Прогресс сохранён — обновите токен и нажмите "Продолжить".', 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          return;
         } else if (isPermError) {
           document.getElementById('tokenHintBox').classList.add('visible');
           document.getElementById('tokenMeta').className = 'token-meta warn';
           document.getElementById('tokenMeta').textContent = '⚠ Нет разрешения ads_read';
-          log('⚠ Токен не имеет разрешения ads_read — пересоздайте с нужным разрешением', 'warn');
+          log('⚠ Нет разрешения ads_read — пересоздайте токен.', 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          return;
         } else if (isRateLimit) {
           const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
           window._rateLimitRetries = (window._rateLimitRetries || 0) + 1;
           const actualPause = Math.min(pauseSec * window._rateLimitRetries, 1200);
-          log(`⏳ Rate limit Meta (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
+          log(`⏳ Rate limit (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
           for (let sec = actualPause; sec > 0; sec--) {
             await new Promise(r => setTimeout(r, 1000));
             if (sec % 30 === 0 || sec <= 10) log(`⏳ Продолжение через ${sec} сек...`, 'warn');
           }
-          log('▶ Продолжаем сбор после паузы...', 'info');
+          log('▶ Продолжаем...', 'info');
           continue;
         } else {
-          log('⚠ Ошибка API: ' + msg, 'error');
+          log('⚠ Неизвестная ошибка API: ' + msg, 'error');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
+          checkResumeState();
+          break;
         }
-        break;
       }
+
       const ads = data.data||[];
       if (ads.length > 0 && pageNum === 1) {
         document.getElementById('tokenHintBox').classList.remove('visible');
         document.getElementById('tokenMeta').className = 'token-meta ok';
         document.getElementById('tokenMeta').textContent = '✓ Токен активен — данные поступают';
-        log(`✓ Токен работает, первые объявления получены`, 'success');
+        log('✓ Токен работает, данные поступают', 'success');
       } else if (ads.length === 0 && pageNum === 1) {
-        log(`Страница 1 пустая — возможно по этому запросу нет объявлений в выбранной стране/периоде`, 'warn');
+        log('Страница 1 пустая — нет объявлений по данному запросу', 'warn');
       }
+
+      // Обрабатываем объявления и накапливаем в resumeSeen
+      for (const ad of ads) {
+        const bodies = ad.ad_creative_bodies||[];
+        const titles = ad.ad_creative_link_titles||[];
+        const text = [...bodies,...titles].join(' ');
+        if (lang && !text.trim()) continue;
+        if (!matchesLanguage(text,lang)) continue;
+        const pid = ad.page_id||ad.id;
+        const contacts = extractContacts(ad, text);
+        const imp = ad.impressions||{}, spd = ad.spend||{};
+        if (!resumeSeen[pid]) {
+          resumeSeen[pid] = {
+            page_id:pid, page_name:ad.page_name||'—',
+            platforms:(ad.publisher_platforms||[]).join(', '),
+            start_date:(ad.ad_delivery_start_time||'').slice(0,10),
+            stop_date:(ad.ad_delivery_stop_time||'').slice(0,10),
+            text:text.slice(0,200)+(text.length>200?'...':''),
+            snapshot_url:ad.ad_snapshot_url||'',
+            impressions:imp.lower_bound?`${imp.lower_bound}–${imp.upper_bound}`:'—',
+            spend:spd.lower_bound?`${spd.lower_bound}–${spd.upper_bound} ${ad.currency||''}`:'—',
+            ...contacts, ad_count:1
+          };
+        } else { resumeSeen[pid].ad_count++; }
+      }
+
       allAds = allAds.concat(ads);
       addLiveRows(ads);
       window._rateLimitRetries = 0;
       setProgress(Math.min(maxAds?(allAds.length/maxAds)*80:pageNum*8, 80));
-      if (maxAds && allAds.length>=maxAds) { allAds=allAds.slice(0,maxAds); log('Лимит достигнут','warn'); break; }
+
+      if (maxAds && allAds.length >= maxAds) {
+        log('Лимит объявлений достигнут','warn'); break;
+      }
       const nc = data.paging?.cursors?.after;
-      if (!nc||!ads.length) break;
-      cursor=nc;
+      if (!nc || !ads.length) break;
+      cursor = nc;
+
+      // Сохраняем прогресс после каждой успешной страницы
+      saveResumeState(ki, term, cursor, allAds, resumeSeen);
+
       const delay = parseInt(document.getElementById('reqDelay')?.value) || 2000;
       log(`  ⏱ Пауза ${delay/1000} сек...`);
       await new Promise(r=>setTimeout(r,delay));
     }
     log(`  Найдено: ${allAds.length}`,'success');
+    isResume = false; // для следующих ключевых слов начинаем с нуля
   }
 
   totalRaw = allAds.length;
   log('Обработка...','info');
   setProgress(88);
-
-  const seen = {};
-  for (const ad of allAds) {
-    const bodies = ad.ad_creative_bodies||[];
-    const titles = ad.ad_creative_link_titles||[];
-    const text = [...bodies,...titles].join(' ');
-    // If language filter is on and text is empty — skip (can't verify language)
-    if (lang && !text.trim()) continue;
-    if (!matchesLanguage(text,lang)) continue;
-    const pid = ad.page_id||ad.id;
-    const imp = ad.impressions||{}, spd = ad.spend||{};
-    const contacts = extractContacts(ad, text);
-    const row = {
-      page_id:pid, page_name:ad.page_name||'—',
-      platforms:(ad.publisher_platforms||[]).join(', '),
-      start_date:(ad.ad_delivery_start_time||'').slice(0,10),
-      stop_date:(ad.ad_delivery_stop_time||'').slice(0,10),
-      text:text.slice(0,200)+(text.length>200?'...':''),
-      snapshot_url:ad.ad_snapshot_url||'',
-      impressions:imp.lower_bound?`${imp.lower_bound}–${imp.upper_bound}`:'—',
-      spend:spd.lower_bound?`${spd.lower_bound}–${spd.upper_bound} ${ad.currency||''}`:'—',
-      fb_page: contacts.fb_page,
-      instagram: contacts.instagram,
-      telegram: contacts.telegram,
-      website: contacts.website,
-    };
-    if (!seen[pid]) { row.ad_count=1; seen[pid]=row; } else seen[pid].ad_count++;
-  }
-  collectedData = Object.values(seen);
+  collectedData = Object.values(resumeSeen);
   setProgress(100);
+  clearResumeState(); // успешно завершили — очищаем сохранённый прогресс
 
   // ---- Second pass: enrich with Facebook page contacts ----
   if (collectedData.length > 0) {
@@ -1613,6 +1732,7 @@ loadSettings();
 loadGsSettings();
 loadLltSettings();
 checkGsToken();
+checkResumeState();
 
 // Load saved token
 (function() {
