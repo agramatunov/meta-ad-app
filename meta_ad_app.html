@@ -224,6 +224,27 @@ tr:hover td { background:rgba(79,110,247,.04); }
   font-size:13px; color:#fca5a5; line-height:1.6;
 }
 .token-hint-box.visible { display:block; }
+.llt-box {
+  background: rgba(79,110,247,.06); border: 1px solid rgba(79,110,247,.2);
+  border-radius: 12px; padding: 16px 18px; margin-top: 14px;
+}
+.llt-box.success { background: rgba(34,197,94,.07); border-color: rgba(34,197,94,.3); }
+.llt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.btn-llt {
+  background: rgba(79,110,247,.15); border: 1px solid rgba(79,110,247,.3);
+  color: #818cf8; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+  padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: all .2s; width: 100%;
+}
+.btn-llt:hover { background: rgba(79,110,247,.25); border-color: var(--accent); }
+.llt-result { font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 8px; min-height: 16px; }
+.llt-result.ok { color: var(--green); }
+.llt-result.err { color: var(--red); }
+.token-expire {
+  font-family: 'DM Mono', monospace; font-size: 11px; margin-top: 5px;
+}
+.token-expire.ok { color: var(--green); }
+.token-expire.warn { color: var(--yellow); }
+.token-expire.err { color: var(--red); }
 .cors-banner {
   background: rgba(245,158,11,.07); border: 1px solid rgba(245,158,11,.3);
   border-radius: 14px; padding: 16px 20px; margin-bottom: 22px;
@@ -377,6 +398,7 @@ tr:hover td { background:rgba(79,110,247,.04); }
         <button class="btn-clear-token" onclick="clearToken()">Удалить</button>
       </div>
       <div class="token-meta" id="tokenMeta"></div>
+      <div class="token-expire" id="tokenExpire"></div>
     </div>
     <div class="field">
       <label>Страна таргетинга</label>
@@ -392,6 +414,31 @@ tr:hover td { background:rgba(79,110,247,.04); }
         <option value="US">🇺🇸 США</option>
       </select>
     </div>
+  </div>
+
+  <!-- Long-lived token section -->
+  <div class="llt-box" id="lltBox">
+    <div class="card-title" style="margin-bottom:12px">⏱ Долгосрочный токен (60 дней)</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.7">
+      Обычный токен из Graph Explorer живёт <strong style="color:var(--yellow)">1–2 часа</strong>. Чтобы получить токен на <strong style="color:var(--green)">60 дней</strong> — введи App ID и App Secret из своего Facebook-приложения.<br>
+      <a href="https://developers.facebook.com/apps/" target="_blank" style="color:#818cf8;font-size:11px;border-bottom:1px dashed rgba(129,140,248,.4);text-decoration:none;">→ developers.facebook.com/apps</a>
+      <span style="color:var(--muted);font-size:11px"> — выбери приложение → "Настройки" → "Основные"</span>
+    </p>
+    <div class="llt-grid">
+      <div class="field" style="margin:0">
+        <label style="font-size:12px">App ID</label>
+        <input type="text" id="appId" placeholder="123456789012345" oninput="saveLltSettings()">
+      </div>
+      <div class="field" style="margin:0">
+        <label style="font-size:12px">App Secret <span class="label-hint">(хранится только в браузере)</span></label>
+        <div class="token-wrap">
+          <input type="password" id="appSecret" placeholder="abc123..." oninput="saveLltSettings()">
+          <button class="toggle-vis" onclick="toggleVisEl('appSecret')">👁</button>
+        </div>
+      </div>
+    </div>
+    <button class="btn-llt" onclick="getLongLivedToken()">🔄 Получить долгосрочный токен (60 дней)</button>
+    <div class="llt-result" id="lltResult"></div>
   </div>
 </div>
 
@@ -665,9 +712,12 @@ document.getElementById('token').addEventListener('input', function() {
   if (v.length > 20) {
     localStorage.setItem('meta_ad_token', v);
     document.getElementById('tokenSaved').classList.add('visible');
+    clearTimeout(window._tokenCheckTimer);
+    window._tokenCheckTimer = setTimeout(() => checkTokenExpiry(v), 800);
   } else {
     localStorage.removeItem('meta_ad_token');
     document.getElementById('tokenSaved').classList.remove('visible');
+    document.getElementById('tokenExpire').textContent = '';
   }
 });
 
@@ -1387,9 +1437,129 @@ async function pushToSheets() {
   btn.textContent = '📤 Добавить новые данные в таблицу';
 }
 
+// ====== LONG-LIVED TOKEN ======
+
+const LLT_SETTINGS_KEY = 'llt_settings';
+
+function saveLltSettings() {
+  localStorage.setItem(LLT_SETTINGS_KEY, JSON.stringify({
+    appId:     document.getElementById('appId').value.trim(),
+    appSecret: document.getElementById('appSecret').value.trim(),
+  }));
+}
+
+function loadLltSettings() {
+  const raw = localStorage.getItem(LLT_SETTINGS_KEY);
+  if (!raw) return;
+  const s = JSON.parse(raw);
+  document.getElementById('appId').value     = s.appId     || '';
+  document.getElementById('appSecret').value = s.appSecret || '';
+}
+
+function toggleVisEl(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function parseTokenExpiry(token) {
+  // JWT tokens have expiry in payload
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1]));
+      if (payload.exp) return new Date(payload.exp * 1000);
+    }
+  } catch(e) {}
+  return null;
+}
+
+async function checkTokenExpiry(token) {
+  if (!token || token.length < 20) return;
+  try {
+    const r = await fetch(`https://graph.facebook.com/debug_token?input_token=${token}&access_token=${token}`);
+    const data = await r.json();
+    const expEl = document.getElementById('tokenExpire');
+    if (data.data) {
+      const d = data.data;
+      if (!d.is_valid) {
+        expEl.className = 'token-expire err';
+        expEl.textContent = '✗ Токен недействителен';
+        return;
+      }
+      if (d.expires_at) {
+        const exp = new Date(d.expires_at * 1000);
+        const now = new Date();
+        const diffH = Math.round((exp - now) / 3600000);
+        const diffD = Math.round(diffH / 24);
+        if (diffH < 2) {
+          expEl.className = 'token-expire err';
+          expEl.textContent = `⚠ Токен истекает через ${diffH} ч (${exp.toLocaleString('ru')})`;
+        } else if (diffD < 3) {
+          expEl.className = 'token-expire warn';
+          expEl.textContent = `⏱ Токен действителен ещё ${diffH} ч`;
+        } else {
+          expEl.className = 'token-expire ok';
+          expEl.textContent = `✓ Токен действителен до ${exp.toLocaleDateString('ru')} (${diffD} дн.)`;
+        }
+      } else if (d.expires_at === 0) {
+        expEl.className = 'token-expire ok';
+        expEl.textContent = '✓ Бессрочный токен';
+      }
+    }
+  } catch(e) {}
+}
+
+async function getLongLivedToken() {
+  const token    = document.getElementById('token').value.trim();
+  const appId    = document.getElementById('appId').value.trim();
+  const appSecret = document.getElementById('appSecret').value.trim();
+  const resultEl = document.getElementById('lltResult');
+
+  if (!token)     { resultEl.className='llt-result err'; resultEl.textContent='⚠ Сначала введите краткосрочный токен выше'; return; }
+  if (!appId)     { resultEl.className='llt-result err'; resultEl.textContent='⚠ Введите App ID'; return; }
+  if (!appSecret) { resultEl.className='llt-result err'; resultEl.textContent='⚠ Введите App Secret'; return; }
+
+  resultEl.className = 'llt-result';
+  resultEl.textContent = '⏳ Получаем долгосрочный токен...';
+
+  try {
+    const url = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${token}`;
+    const r = await fetch(url);
+    const data = await r.json();
+
+    if (data.error) {
+      resultEl.className = 'llt-result err';
+      resultEl.textContent = '✗ Ошибка: ' + data.error.message;
+      return;
+    }
+
+    if (data.access_token) {
+      // Save and apply the new long-lived token
+      document.getElementById('token').value = data.access_token;
+      localStorage.setItem('meta_ad_token', data.access_token);
+      document.getElementById('tokenSaved').classList.add('visible');
+      document.getElementById('tokenMeta').className = 'token-meta ok';
+      document.getElementById('tokenMeta').textContent = '✓ Долгосрочный токен сохранён';
+
+      const expiresSec = data.expires_in || 0;
+      const expiresDays = Math.round(expiresSec / 86400);
+      resultEl.className = 'llt-result ok';
+      resultEl.textContent = `✅ Готово! Токен действителен ${expiresDays > 0 ? expiresDays + ' дней' : 'без ограничений'}. Он уже вставлен в поле выше.`;
+
+      document.getElementById('lltBox').classList.add('success');
+      await checkTokenExpiry(data.access_token);
+      showToast(`✅ Долгосрочный токен получен на ${expiresDays} дней`);
+    }
+  } catch(e) {
+    resultEl.className = 'llt-result err';
+    resultEl.textContent = '✗ Ошибка сети: ' + e.message;
+  }
+}
+
 // ====== INIT (runs after all functions are defined) ======
 loadSettings();
 loadGsSettings();
+loadLltSettings();
 checkGsToken();
 
 // Load saved token
@@ -1399,7 +1569,8 @@ checkGsToken();
     document.getElementById('token').value = saved;
     document.getElementById('tokenSaved').classList.add('visible');
     document.getElementById('tokenMeta').className = 'token-meta ok';
-    document.getElementById('tokenMeta').textContent = '✓ Токен загружен из памяти (проверяется при запуске)';
+    document.getElementById('tokenMeta').textContent = '✓ Токен загружен из памяти';
+    checkTokenExpiry(saved);
   }
 })();
 
