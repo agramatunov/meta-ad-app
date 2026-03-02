@@ -1743,29 +1743,33 @@ async function pushToSheets() {
       const tgUser = extractTgUsername(tgUrl);
       if (igUser) existingIg.add(igUser);
       if (tgUser) existingTg.add(tgUser);
-      if (siteUrl) existingSites.add(siteUrl.trim().toLowerCase());
+      if (siteUrl) existingSites.add(siteUrl.trim().toLowerCase().replace(/\/+$/, ''));
     }
 
-    // 2. Filter new rows — skip if Instagram already exists
+    // 2. Filter new rows — skip if Instagram, Telegram or website already exists
     const newRows = [];
     for (const row of collectedData) {
-      const igUser = extractIgUsername(row.instagram);
-      const tgUser = extractTgUsername(row.telegram);
+      const igUser  = extractIgUsername(row.instagram);
+      const tgUser  = extractTgUsername(row.telegram);
+      const siteNorm = row.website ? row.website.trim().toLowerCase().replace(/\/+$/, '') : '';
 
-      // Skip if Instagram already in table (primary dedup key)
-      if (igUser && existingIg.has(igUser)) continue;
+      // Skip if any contact already in table
+      if (igUser   && existingIg.has(igUser))     continue;
+      if (tgUser   && existingTg.has(tgUser))     continue;
+      if (siteNorm && existingSites.has(siteNorm)) continue;
       // Skip if no contacts at all
       if (!row.instagram && !row.telegram && !row.website) continue;
 
       newRows.push(row);
       // Add to sets so duplicates within new batch are also caught
-      if (igUser) existingIg.add(igUser);
-      if (tgUser) existingTg.add(tgUser);
+      if (igUser)   existingIg.add(igUser);
+      if (tgUser)   existingTg.add(tgUser);
+      if (siteNorm) existingSites.add(siteNorm);
     }
 
     if (!newRows.length) {
       resultEl.className = 'push-result visible';
-      resultEl.textContent = '✓ Нет новых данных — все Instagram уже есть в таблице';
+      resultEl.textContent = '✓ Нет новых данных — все контакты уже есть в таблице';
       btn.disabled = false;
       btn.textContent = '📤 Добавить новые данные в таблицу';
       return;
