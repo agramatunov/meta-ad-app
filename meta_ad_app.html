@@ -173,22 +173,18 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.5); curso
   display:none; transition:all .3s;
 }
 .btn-resume:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
-.btn-controls {
-  display:none; gap:10px; margin-top:10px;
-}
-.btn-controls.active { display:flex; }
 .btn-pause {
-  flex:1; background:rgba(245,158,11,.15); border:1px solid rgba(245,158,11,.4);
-  color:#fcd34d; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
-  padding:13px; border-radius:14px; cursor:pointer; transition:all .3s;
+  width:100%; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+  color:#fca5a5; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; margin-top:8px;
+  display:none; transition:all .3s;
 }
-.btn-pause:hover { background:rgba(245,158,11,.28); transform:translateY(-1px); }
-.btn-stop {
-  flex:1; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
-  color:#f87171; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
-  padding:13px; border-radius:14px; cursor:pointer; transition:all .3s;
+.btn-pause:hover { background:rgba(239,68,68,.22); transform:translateY(-1px); }
+.btn-pause.paused {
+  background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.35);
+  color:#86efac;
 }
-.btn-stop:hover { background:rgba(239,68,68,.22); transform:translateY(-1px); }
+.btn-pause.paused:hover { background:rgba(34,197,94,.22); }
 .resume-banner {
   display:none; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.3);
   border-radius:12px; padding:14px 18px; margin-top:10px;
@@ -335,26 +331,6 @@ tr:hover td { background:rgba(79,110,247,.04); }
 .push-result.error { border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.07); color: var(--red); }
 .token-hint-box a { color:#f87171; font-weight:600; }
 .token-hint-box strong { color:#fcd34d; }
-.btn-edit-row {
-  background: none; border: 1px solid rgba(79,110,247,.2);
-  color: var(--muted); font-size: 11px; padding: 2px 7px;
-  border-radius: 5px; cursor: pointer; transition: all .2s;
-  font-family: 'DM Mono', monospace;
-}
-.btn-edit-row:hover { border-color: var(--accent); color: #818cf8; }
-.inline-edit {
-  display: flex; gap: 4px; align-items: center;
-}
-.inline-edit input {
-  width: 130px; background: var(--surface2); border: 1px solid var(--accent);
-  color: var(--text); font-family: 'DM Mono', monospace; font-size: 11px;
-  padding: 3px 7px; border-radius: 6px; outline: none;
-}
-.btn-save-edit {
-  background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3);
-  color: var(--green); font-size: 11px; padding: 3px 8px;
-  border-radius: 5px; cursor: pointer; font-family: 'DM Mono', monospace;
-}
 .token-meta {
   font-family:'DM Mono',monospace; font-size:11px; color:var(--muted);
   margin-top:5px; min-height:16px;
@@ -424,7 +400,7 @@ tr:hover td { background:rgba(79,110,247,.04); }
     Chrome: <a href="https://chrome.google.com/webstore/detail/cors-unblock/lfhmikememgdcahcdlaciloancbhjino" target="_blank">CORS Unblock → Chrome Web Store</a><br>
     После установки — <strong>включи расширение</strong> (иконка в панели → кнопка On/Off) и перезагрузи страницу.
   </div>
-  <button type="button" class="cors-banner-hide" onclick="document.getElementById('corsBanner').style.display='none'" title="Скрыть">×</button>
+  <button class="cors-banner-hide" onclick="document.getElementById('corsBanner').style.display='none'" title="Скрыть">×</button>
 </div>
 
 <div class="header">
@@ -441,11 +417,11 @@ tr:hover td { background:rgba(79,110,247,.04); }
       <label>Access Token <a href="https://developers.facebook.com/tools/explorer/" target="_blank" class="label-hint" style="text-decoration:none;border-bottom:1px dashed rgba(129,140,248,.4);">→ Graph Explorer (разрешения: ads_read + pages_read_engagement)</a></label>
       <div class="token-wrap">
         <input type="password" id="token" placeholder="EAALBe9om..." autocomplete="off">
-        <button type="button" class="toggle-vis" onclick="toggleVis()">👁</button>
+        <button class="toggle-vis" onclick="toggleVis()">👁</button>
       </div>
       <div class="token-saved" id="tokenSaved">
         Токен сохранён
-        <button type="button" class="btn-clear-token" onclick="clearToken()">Удалить</button>
+        <button class="btn-clear-token" onclick="clearToken()">Удалить</button>
       </div>
       <div class="token-meta" id="tokenMeta"></div>
       <div class="token-expire" id="tokenExpire"></div>
@@ -483,11 +459,11 @@ tr:hover td { background:rgba(79,110,247,.04); }
         <label style="font-size:12px">App Secret <span class="label-hint">(хранится только в браузере)</span></label>
         <div class="token-wrap">
           <input type="password" id="appSecret" placeholder="abc123..." oninput="saveLltSettings()">
-          <button type="button" class="toggle-vis" onclick="toggleVisEl('appSecret')">👁</button>
+          <button class="toggle-vis" onclick="toggleVisEl('appSecret')">👁</button>
         </div>
       </div>
     </div>
-    <button type="button" class="btn-llt" onclick="getLongLivedToken()">🔄 Получить долгосрочный токен (60 дней)</button>
+    <button class="btn-llt" onclick="getLongLivedToken()">🔄 Получить долгосрочный токен (60 дней)</button>
     <div class="llt-result" id="lltResult"></div>
   </div>
 </div>
@@ -496,13 +472,17 @@ tr:hover td { background:rgba(79,110,247,.04); }
 <div class="card" style="animation-delay:.1s">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
   <div class="card-title" style="margin-bottom:0">🎛️ Фильтры</div>
-  <button type="button" onclick="resetSettings()" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#f87171;font-family:'DM Mono',monospace;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">↺ Сбросить фильтры</button>
+  <button onclick="resetSettings()" style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#f87171;font-family:'DM Mono',monospace;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;transition:all .2s;" onmouseover="this.style.background='rgba(239,68,68,.15)'" onmouseout="this.style.background='rgba(239,68,68,.08)'">↺ Сбросить фильтры</button>
 </div>
 
   <!-- Criteria banner -->
   <div class="criteria-banner visible" id="criteriaBanner">
-    <div class="criteria-label">Парсер будет собирать по следующим критериям:</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="criteria-label" style="margin-bottom:0">Парсер будет собирать по следующим критериям:</div>
+      <button id="btnCheckCount" onclick="checkAdsCount()" style="background:rgba(79,110,247,.15);border:1px solid rgba(79,110,247,.3);color:#818cf8;font-family:'DM Mono',monospace;font-size:11px;padding:5px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:all .2s;" onmouseover="this.style.background='rgba(79,110,247,.25)'" onmouseout="this.style.background='rgba(79,110,247,.15)'">🔍 Проверить кол-во</button>
+    </div>
     <div id="criteriaContent"></div>
+    <div id="countResult" style="display:none;margin-top:10px;padding:8px 12px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:12px;color:#86efac;font-family:'DM Mono',monospace;"></div>
   </div>
 
   <div class="section-label">Язык и платформа</div>
@@ -600,7 +580,7 @@ tr:hover td { background:rgba(79,110,247,.04); }
   <div class="keywords-wrap" id="kwTags"></div>
   <div class="kw-input-wrap" style="margin-bottom:0">
     <input type="text" id="kwInput" placeholder="Добавить слово..." onkeydown="if(event.key==='Enter')addKw()">
-    <button type="button" class="btn-add" onclick="addKw()">+ Добавить</button>
+    <button class="btn-add" onclick="addKw()">+ Добавить</button>
   </div>
 
   <div class="divider"></div>
@@ -611,19 +591,18 @@ tr:hover td { background:rgba(79,110,247,.04); }
     2. Выберите своё приложение и добавьте разрешение <strong>ads_read</strong><br>
     3. Нажмите "Generate Access Token" и вставьте его выше
   </div>
-  <button type="button" class="btn-run" id="btnRun" onclick="runCollection(false)">
+  <button class="btn-run" id="btnRun" onclick="runCollection(false)">
     🚀 Начать сбор по фильтрам
   </button>
+  <button class="btn-pause" id="btnPauseToggle" onclick="togglePause()">
+    ⏸ Приостановить сбор
+  </button>
   <div class="resume-banner" id="resumeBanner"></div>
-  <button type="button" class="btn-resume" id="btnResume" onclick="runCollection(true)">
+  <button class="btn-resume" id="btnResume" onclick="runCollection(true)">
     ▶ Продолжить с места остановки
   </button>
 
   <div class="progress-wrap" id="progressWrap">
-    <div class="btn-controls" id="btnControls">
-      <button type="button" class="btn-pause" id="btnPause" onclick="togglePause()">⏸ Приостановить</button>
-      <button type="button" class="btn-stop" id="btnStop" onclick="stopCollection()">⏹ Завершить сбор</button>
-    </div>
     <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
     <div class="log" id="log"></div>
   </div>
@@ -660,13 +639,13 @@ tr:hover td { background:rgba(79,110,247,.04); }
       <thead>
         <tr>
           <th>#</th><th>Название страницы</th><th>Платформы</th>
-          <th>Дата начала</th><th>Объявлений</th><th>Instagram</th><th>Telegram</th><th>Сайт</th><th>Facebook</th><th>Объявление</th><th>Ред.</th>
+          <th>Дата начала</th><th>Объявлений</th><th>Instagram</th><th>Telegram</th><th>Сайт</th><th>Facebook</th><th>Объявление</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>
     </table>
   </div>
-  <button type="button" class="btn-download" onclick="downloadExcel()">⬇️ Скачать Excel</button>
+  <button class="btn-download" onclick="downloadExcel()">⬇️ Скачать Excel</button>
 </div>
 
 <!-- Google Sheets Integration -->
@@ -685,8 +664,8 @@ tr:hover td { background:rgba(79,110,247,.04); }
   </div>
 
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-    <button type="button" class="btn-gs" id="btnGsLogin" onclick="gsLogin()">🔑 Войти через Google</button>
-    <button type="button" class="btn-gs" id="btnGsLogout" onclick="gsLogout()" style="display:none;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#f87171">Выйти</button>
+    <button class="btn-gs" id="btnGsLogin" onclick="gsLogin()">🔑 Войти через Google</button>
+    <button class="btn-gs" id="btnGsLogout" onclick="gsLogout()" style="display:none;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);color:#f87171">Выйти</button>
     <div class="gs-status" id="gsStatus" style="flex:1;min-width:200px">
       <div class="gs-dot"></div>
       <span id="gsStatusText">Не подключено</span>
@@ -700,7 +679,7 @@ tr:hover td { background:rgba(79,110,247,.04); }
     <input type="text" id="gSheetName" placeholder="Лист1" value="Лист1" style="max-width:200px" oninput="saveGsSettings()">
   </div>
 
-  <button type="button" class="btn-push visible" id="btnPush" onclick="pushToSheets()" disabled>
+  <button class="btn-push visible" id="btnPush" onclick="pushToSheets()" disabled>
     📤 Добавить новые данные в таблицу
   </button>
   <div class="push-result" id="pushResult"></div>
@@ -821,7 +800,13 @@ const LIVE_MAX_ROWS = 150; // max rows shown in live table
 function addLiveRows(ads) {
   const tbody = document.getElementById('liveTbody');
   liveRowCount += ads.length;
-  document.getElementById('liveCount').textContent = liveRowCount + ' объявлений';
+  const maxAds = parseInt(document.getElementById('maxAds').value) || 0;
+  const liveCountEl = document.getElementById('liveCount');
+  if (maxAds) {
+    liveCountEl.textContent = `${liveRowCount} / ${maxAds} объявлений`;
+  } else {
+    liveCountEl.textContent = liveRowCount + ' объявлений';
+  }
 
   // Only render last batch, remove oldest rows if over limit
   const frag = document.createDocumentFragment();
@@ -857,7 +842,7 @@ function addLiveRows(ads) {
 
 function renderKwTags() {
   document.getElementById('kwTags').innerHTML = keywords.map((k,i) =>
-    `<span class="kw-tag">${k}<button type="button" class="kw-remove" onclick="removeKw(${i})">×</button></span>`
+    `<span class="kw-tag">${k}<button class="kw-remove" onclick="removeKw(${i})">×</button></span>`
   ).join('');
   updateCriteria();
 }
@@ -910,13 +895,9 @@ function extractContacts(ad, text) {
 
   // Instagram — explicit domain OR @mention (@ always = instagram)
   const igExplicit = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,30})/i);
-  // Patterns like "instagram: username", "ig: username", "inst: username", "insta: username"
-  const igLabel = allText.match(/(?:instagram|insta|inst|ig)\s*[:\-—]\s*@?([a-zA-Z0-9_.]{2,30})/i);
   const igAt = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,30})/);
   if (igExplicit) {
     contacts.instagram = 'https://instagram.com/' + igExplicit[1];
-  } else if (igLabel) {
-    contacts.instagram = 'https://instagram.com/' + igLabel[1];
   } else if (igAt) {
     contacts.instagram = 'https://instagram.com/' + igAt[1];
   }
@@ -985,33 +966,6 @@ function log(msg, type='') {
 function setProgress(p) { document.getElementById('progressBar').style.width = p+'%'; }
 
 let collectedData=[], totalRaw=0, pagesCollected=0;
-let _isPaused = false, _isStopped = false;
-
-function togglePause() {
-  _isPaused = !_isPaused;
-  const btn = document.getElementById('btnPause');
-  if (_isPaused) {
-    btn.textContent = '▶ Продолжить';
-    btn.style.background = 'rgba(34,197,94,.15)';
-    btn.style.borderColor = 'rgba(34,197,94,.4)';
-    btn.style.color = '#4ade80';
-    log('⏸ Сбор приостановлен. Нажми «Продолжить» чтобы возобновить.', 'warn');
-  } else {
-    btn.textContent = '⏸ Приостановить';
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    btn.style.color = '';
-    log('▶ Сбор возобновлён.', 'info');
-  }
-}
-
-function stopCollection() {
-  if (!confirm('Завершить сбор? Уже собранные данные будут показаны.')) return;
-  _isStopped = true;
-  _isPaused = false;
-  log('⏹ Сбор остановлен пользователем.', 'warn');
-  document.getElementById('btnControls').classList.remove('active');
-}
 
 // ============================================================
 // 💾 RESUME STATE — сохранение/восстановление прогресса
@@ -1049,7 +1003,32 @@ function clearResumeState() {
   document.getElementById('btnResume').style.display = 'none';
 }
 
-function checkResumeState() {
+// ============================================================
+// ⏸ PAUSE / RESUME during active collection
+// ============================================================
+let _isPaused = false;
+let _pauseResolve = null;
+
+function togglePause() {
+  const btn = document.getElementById('btnPauseToggle');
+  if (!_isPaused) {
+    _isPaused = true;
+    btn.textContent = '▶ Возобновить сбор';
+    btn.classList.add('paused');
+    log('⏸ Сбор приостановлен — нажмите "Возобновить" для продолжения', 'warn');
+  } else {
+    _isPaused = false;
+    btn.textContent = '⏸ Приостановить сбор';
+    btn.classList.remove('paused');
+    log('▶ Сбор возобновлён', 'info');
+    if (_pauseResolve) { _pauseResolve(); _pauseResolve = null; }
+  }
+}
+
+function waitIfPaused() {
+  if (!_isPaused) return Promise.resolve();
+  return new Promise(resolve => { _pauseResolve = resolve; });
+}
   try {
     const raw = localStorage.getItem(RESUME_KEY);
     if (!raw) return;
@@ -1088,57 +1067,26 @@ async function fetchPageContacts(token, pageId) {
   try {
     const p = new URLSearchParams({
       access_token: token,
-      fields: [
-        'website','link','about','bio','description','emails',
-        'instagram_business_account{username,website_url,biography}',
-        'connected_instagram_account{username,website_url,biography}',
-      ].join(','),
+      fields: 'website,link,instagram_business_account{username},connected_instagram_account{username}',
     });
     const r = await fetch(`https://graph.facebook.com/v19.0/${pageId}?${p}`);
     const data = await r.json();
     if (data.error) return {};
     const result = {};
+    const allText = [data.website||'', data.link||''].join(' ');
 
-    const igAcc = data.instagram_business_account || data.connected_instagram_account;
-    const allText = [
-      data.website     || '',
-      data.link        || '',
-      data.about       || '',
-      data.bio         || '',
-      data.description || '',
-      (data.emails || []).join(' '),
-      igAcc?.biography   || '',
-      igAcc?.website_url || '',
-    ].join(' ');
-
-    // --- Instagram ---
-    if (igAcc?.username) {
-      result.instagram = 'https://instagram.com/' + igAcc.username;
-    } else {
-      const igMatch = allText.match(/instagram\.com\/([a-zA-Z0-9_.]{2,40})/i);
-      if (igMatch) result.instagram = 'https://instagram.com/' + igMatch[1];
-      else {
-        const atMatch = allText.match(/(?<![a-zA-Z0-9])@([a-zA-Z0-9_.]{2,40})/);
-        if (atMatch) result.instagram = 'https://instagram.com/' + atMatch[1];
-      }
-    }
-
-    // --- Telegram ---
+    // Telegram from website or link field
     const tgMatch = allText.match(/(?:t\.me\/|telegram\.me\/)([a-zA-Z0-9_]{4,32})/i);
     if (tgMatch) result.telegram = 'https://t.me/' + tgMatch[1];
 
-    // --- Website ---
-    const badDomains = /facebook\.com|instagram\.com|t\.me|telegram\.me|vk\.com|twitter\.com|x\.com/i;
-    if (data.website && !badDomains.test(data.website)) {
-      result.website = data.website.trim();
+    // Website (only if not telegram)
+    if (data.website && !/t\.me\/|telegram\.me\//i.test(data.website)) {
+      result.website = data.website;
     }
-    if (!result.website && igAcc?.website_url && !badDomains.test(igAcc.website_url)) {
-      result.website = igAcc.website_url.trim();
-    }
-    if (!result.website) {
-      const urlMatch = allText.match(/https?:\/\/(?!(?:www\.)?(?:facebook|instagram|t\.me|telegram\.me|vk\.com|twitter|x\.com))[^\s"'<>]{5,80}/i);
-      if (urlMatch) result.website = urlMatch[0].replace(/[.,;)>]+$/, '');
-    }
+
+    // Instagram
+    const igAcc = data.instagram_business_account || data.connected_instagram_account;
+    if (igAcc && igAcc.username) result.instagram = 'https://instagram.com/' + igAcc.username;
 
     return result;
   } catch(e) {
@@ -1146,21 +1094,73 @@ async function fetchPageContacts(token, pageId) {
   }
 }
 
-// ── Проверяет счётчик последовательных ошибок и приостанавливает сбор при 3 подряд ──
-function checkConsecutiveErrors(reason) {
-  window._consecutiveErrors = (window._consecutiveErrors || 0) + 1;
-  if (window._consecutiveErrors >= 3) {
-    _isPaused = true;
-    window._consecutiveErrors = 0;
-    const btn = document.getElementById('btnPause');
-    btn.textContent = '▶ Продолжить';
-    btn.style.background = 'rgba(34,197,94,.15)';
-    btn.style.borderColor = 'rgba(34,197,94,.4)';
-    btn.style.color = '#4ade80';
-    log(`⛔ 3 ошибки подряд (${reason}) — сбор приостановлен. Нажми «Продолжить» когда будешь готов.`, 'error');
-    return true; // caller should wait for unpause
+// ============================================================
+// 🔍 CHECK ADS COUNT — быстрая проверка кол-ва объявлений
+// ============================================================
+async function checkAdsCount() {
+  const token = document.getElementById('token').value.trim();
+  if (!token) { alert('Введите Access Token!'); return; }
+  if (!keywords.length) { alert('Добавьте ключевое слово!'); return; }
+
+  const btn = document.getElementById('btnCheckCount');
+  const resultEl = document.getElementById('countResult');
+  btn.disabled = true;
+  btn.textContent = '⏳ Проверяем...';
+  resultEl.style.display = 'block';
+  resultEl.style.background = 'rgba(79,110,247,.07)';
+  resultEl.style.borderColor = 'rgba(79,110,247,.2)';
+  resultEl.style.color = '#818cf8';
+  resultEl.textContent = '⏳ Делаем пробный запрос к API...';
+
+  const country  = document.getElementById('country').value;
+  const platform = document.getElementById('platform').value;
+  const media    = document.getElementById('mediaType').value;
+  const status   = document.getElementById('adStatus').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo   = document.getElementById('dateTo').value;
+
+  try {
+    let totalPages = 0;
+    let totalAds = 0;
+    const results = [];
+
+    for (const term of keywords) {
+      // Fetch first page only (limit=500 max per page)
+      const data = await fetchPage(token, term, country, status, media, platform, dateFrom, dateTo, null);
+      if (data.error) {
+        resultEl.style.background = 'rgba(239,68,68,.07)';
+        resultEl.style.borderColor = 'rgba(239,68,68,.2)';
+        resultEl.style.color = '#fca5a5';
+        resultEl.textContent = `❌ API ошибка: ${data.error.message}`;
+        btn.disabled = false;
+        btn.textContent = '🔍 Проверить кол-во';
+        return;
+      }
+      const count = (data.data || []).length;
+      const hasMore = !!(data.paging?.cursors?.after && count > 0);
+      results.push({ term, count, hasMore });
+      totalAds += count;
+    }
+
+    const parts = results.map(r =>
+      `"${r.term}": ${r.count}${r.hasMore ? '+' : ''} объявлений`
+    );
+    const totalHasMore = results.some(r => r.hasMore);
+
+    resultEl.style.background = 'rgba(34,197,94,.07)';
+    resultEl.style.borderColor = 'rgba(34,197,94,.2)';
+    resultEl.style.color = '#86efac';
+    resultEl.innerHTML = `✅ На первой странице найдено: <strong style="color:#4ade80">${totalAds}${totalHasMore ? '+' : ''} объявлений</strong><br>` +
+      `<span style="color:var(--muted);font-size:11px">${parts.join(' · ')}${totalHasMore ? ' · Это только первая страница (500), реальных объявлений значительно больше' : ''}</span>`;
+  } catch(e) {
+    resultEl.style.background = 'rgba(239,68,68,.07)';
+    resultEl.style.borderColor = 'rgba(239,68,68,.2)';
+    resultEl.style.color = '#fca5a5';
+    resultEl.textContent = `❌ Ошибка сети: ${e.message}`;
   }
-  return false;
+
+  btn.disabled = false;
+  btn.textContent = '🔍 Проверить кол-во';
 }
 
 async function runCollection(isResume = false) {
@@ -1200,21 +1200,19 @@ async function runCollection(isResume = false) {
   document.getElementById('btnResume').style.display = 'none';
   document.getElementById('resumeBanner').classList.remove('visible');
   document.getElementById('progressWrap').classList.add('active');
-  document.getElementById('btnControls').classList.add('active');
-  document.getElementById('btnPause').textContent = '⏸ Приостановить';
-  document.getElementById('btnPause').style.background = '';
-  document.getElementById('btnPause').style.borderColor = '';
-  document.getElementById('btnPause').style.color = '';
   document.getElementById('results').classList.remove('active');
   document.getElementById('log').innerHTML = '';
   if (!isResume) document.getElementById('tableBody').innerHTML = '';
   setProgress(0);
   if (!isResume) { allAds = []; resumeSeen = {}; }
   totalRaw=0; pagesCollected=0;
-  _isPaused = false; _isStopped = false;
-  window._consecutiveErrors = 0;
   initLiveFeed();
   window._rateLimitRetries = 0;
+  _isPaused = false;
+  const pauseBtn = document.getElementById('btnPauseToggle');
+  pauseBtn.style.display = 'block';
+  pauseBtn.textContent = '⏸ Приостановить сбор';
+  pauseBtn.classList.remove('paused');
 
   log('Запуск сбора...','info');
   log(`Страна: ${country} | Статус: ${status} | Медиа: ${media}`,'info');
@@ -1229,7 +1227,12 @@ async function runCollection(isResume = false) {
 
     while (true) {
       pageNum++; pagesCollected++;
-      log(`  Стр.${pageNum} (собрано: ${allAds.length})`);
+
+      // Ждём если пользователь нажал паузу
+      await waitIfPaused();
+
+      const limitStr = maxAds ? ` / лимит ${maxAds}` : '';
+      log(`  Стр.${pageNum} · собрано: ${allAds.length}${limitStr}`);
       let data;
       try {
         data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor);
@@ -1239,12 +1242,12 @@ async function runCollection(isResume = false) {
         await new Promise(r=>setTimeout(r,30000));
         try { data = await fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor); }
         catch(e2) {
-          checkConsecutiveErrors('сеть');
-          log('Сеть недоступна. Прогресс сохранён.','error');
+          log('Сеть недоступна. Прогресс сохранён — нажмите "Продолжить" когда появится интернет.','error');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
-          if (_isStopped) { checkResumeState(); document.getElementById('btnRun').disabled = false; return; }
-          continue;
+          checkResumeState();
+          document.getElementById('btnRun').disabled = false;
+          document.getElementById('btnPauseToggle').style.display = 'none';
+          return;
         }
       }
 
@@ -1265,62 +1268,38 @@ async function runCollection(isResume = false) {
           document.getElementById('tokenHintBox').classList.add('visible');
           document.getElementById('tokenMeta').className = 'token-meta warn';
           document.getElementById('tokenMeta').textContent = '⚠ Токен истёк или недействителен';
+          log('⚠ Токен истёк. Прогресс сохранён — обновите токен и нажмите "Продолжить".', 'warn');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          if (checkConsecutiveErrors('токен')) {
-            log('⚠ Токен истёк. Обнови токен и нажми «Продолжить».', 'warn');
-            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
-            if (_isStopped) break;
-            continue;
-          }
-          log('⚠ Токен истёк. Прогресс сохранён — обновите токен и нажмите «Продолжить».', 'warn');
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
+          document.getElementById('btnPauseToggle').style.display = 'none';
           return;
         } else if (isPermError) {
           document.getElementById('tokenHintBox').classList.add('visible');
           document.getElementById('tokenMeta').className = 'token-meta warn';
           document.getElementById('tokenMeta').textContent = '⚠ Нет разрешения ads_read';
-          saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          if (checkConsecutiveErrors('права')) {
-            log('⚠ Нет прав ads_read. Пересоздай токен и нажми «Продолжить».', 'warn');
-            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
-            if (_isStopped) break;
-            continue;
-          }
           log('⚠ Нет разрешения ads_read — пересоздайте токен.', 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
+          document.getElementById('btnPauseToggle').style.display = 'none';
           return;
         } else if (isRateLimit) {
           const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
           window._rateLimitRetries = (window._rateLimitRetries || 0) + 1;
           const actualPause = Math.min(pauseSec * window._rateLimitRetries, 1200);
-          saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          if (checkConsecutiveErrors('rate limit')) {
-            log(`⛔ Rate limit 3 раза подряд — сбор приостановлен. Нажми «Продолжить» когда будешь готов.`, 'error');
-            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
-            if (_isStopped) break;
-            window._rateLimitRetries = 0;
-            continue;
-          }
           log(`⏳ Rate limit (#${window._rateLimitRetries}) — пауза ${actualPause} сек...`, 'warn');
+          saveResumeState(ki, term, cursor, allAds, resumeSeen);
           for (let sec = actualPause; sec > 0; sec--) {
             await new Promise(r => setTimeout(r, 1000));
             if (sec % 30 === 0 || sec <= 10) log(`⏳ Продолжение через ${sec} сек...`, 'warn');
-            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
-            if (_isStopped) break;
           }
-          if (_isStopped) break;
           log('▶ Продолжаем...', 'info');
           continue;
         } else {
           log('⚠ Неизвестная ошибка API: ' + msg, 'error');
           saveResumeState(ki, term, cursor, allAds, resumeSeen);
-          if (checkConsecutiveErrors('API ' + code)) {
-            while (_isPaused) { await new Promise(r=>setTimeout(r,500)); }
-            if (_isStopped) break;
-            continue;
-          }
+          checkResumeState();
           break;
         }
       }
@@ -1363,7 +1342,6 @@ async function runCollection(isResume = false) {
       allAds = allAds.concat(ads);
       addLiveRows(ads);
       window._rateLimitRetries = 0;
-      window._consecutiveErrors = 0;
       setProgress(Math.min(maxAds?(allAds.length/maxAds)*80:pageNum*8, 80));
 
       if (maxAds && allAds.length >= maxAds) {
@@ -1379,23 +1357,14 @@ async function runCollection(isResume = false) {
       const delay = parseInt(document.getElementById('reqDelay')?.value) || 2000;
       log(`  ⏱ Пауза ${delay/1000} сек...`);
       await new Promise(r=>setTimeout(r,delay));
-
-      // Проверка паузы — ждём пока не нажмут "Продолжить"
-      while (_isPaused) {
-        await new Promise(r=>setTimeout(r,500));
-      }
-      // Проверка остановки
-      if (_isStopped) break;
     }
     log(`  Найдено: ${allAds.length}`,'success');
-    isResume = false;
-    if (_isStopped) break;
+    isResume = false; // для следующих ключевых слов начинаем с нуля
   }
 
   totalRaw = allAds.length;
   log('Обработка...','info');
   setProgress(88);
-  document.getElementById('btnControls').classList.remove('active');
   collectedData = Object.values(resumeSeen);
   setProgress(100);
   clearResumeState(); // успешно завершили — очищаем сохранённый прогресс
@@ -1428,7 +1397,9 @@ async function runCollection(isResume = false) {
     } else {
       log(`Найдено ${totalRaw} объявлений из API, но все отфильтрованы языковым фильтром. Попробуйте выбрать "Все языки".`, 'warn');
     }
-    document.getElementById('btnRun').disabled=false; return;
+    document.getElementById('btnRun').disabled=false;
+  document.getElementById('btnPauseToggle').style.display = 'none';
+  return;
   }
   log(`✅ Рекламодателей: ${collectedData.length}`,'success');
 
@@ -1473,61 +1444,18 @@ async function runCollection(isResume = false) {
       <td>${plats||'—'}</td>
       <td>${row.start_date||'—'}</td>
       <td><span class="count-badge">${row.ad_count}</span></td>
-      <td class="link-cell" id="ig-cell-${i}">${mkLink(row.instagram, '→ Instagram')}</td>
-      <td class="link-cell" id="tg-cell-${i}">${mkLink(row.telegram, '→ Telegram')}</td>
-      <td class="link-cell" id="ws-cell-${i}">${row.website ? mkLink(row.website, row.website.replace(/https?:\/\//,'').slice(0,25)) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td class="link-cell">${mkLink(row.instagram, '→ Instagram')}</td>
+      <td class="link-cell">${mkLink(row.telegram, '→ Telegram')}</td>
+      <td class="link-cell">${row.website ? mkLink(row.website, row.website.replace(/https?:\/\//,'').slice(0,25)) : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="link-cell">${mkLink(row.fb_page, '→ Facebook')}</td>
-      <td class="link-cell">${mkLink(row.snapshot_url, '→ Открыть')}</td>
-      <td><button type="button" class="btn-edit-row" onclick="editRow(${i})">✏️</button></td>`;
+      <td class="link-cell">${mkLink(row.snapshot_url, '→ Открыть')}</td>`;
     tbody.appendChild(tr);
   });
 
   document.getElementById('results').classList.add('active');
   document.getElementById('btnRun').disabled=false;
+  document.getElementById('btnPauseToggle').style.display = 'none';
   document.getElementById('btnPush').disabled = false;
-}
-
-function editRow(i) {
-  const row = collectedData[i];
-  const igCell = document.getElementById('ig-cell-' + i);
-  const tgCell = document.getElementById('tg-cell-' + i);
-  const wsCell = document.getElementById('ws-cell-' + i);
-  if (!igCell) return;
-
-  function makeInput(label, val, field, cell) {
-    const clean = val ? val.replace(/^https?:\/\/(?:www\.)?(?:instagram\.com\/|t\.me\/)?/, '') : '';
-    cell.innerHTML = `<div class="inline-edit">
-      <input type="text" placeholder="${label}" value="${clean}" id="edit-${field}-${i}">
-      <button type="button" class="btn-save-edit" onclick="saveEdit(${i})">✓</button>
-    </div>`;
-  }
-  makeInput('instagram username', row.instagram, 'ig', igCell);
-  makeInput('t.me/username', row.telegram, 'tg', tgCell);
-  makeInput('https://...', row.website, 'ws', wsCell);
-  document.getElementById('edit-ig-' + i)?.focus();
-}
-
-function saveEdit(i) {
-  const row = collectedData[i];
-  const igVal = document.getElementById('edit-ig-' + i)?.value.trim();
-  const tgVal = document.getElementById('edit-tg-' + i)?.value.trim();
-  const wsVal = document.getElementById('edit-ws-' + i)?.value.trim();
-
-  if (igVal !== undefined) {
-    row.instagram = igVal ? (igVal.startsWith('http') ? igVal : 'https://instagram.com/' + igVal) : '';
-  }
-  if (tgVal !== undefined) {
-    row.telegram = tgVal ? (tgVal.startsWith('http') ? tgVal : 'https://t.me/' + tgVal) : '';
-  }
-  if (wsVal !== undefined) {
-    row.website = wsVal ? (wsVal.startsWith('http') ? wsVal : 'https://' + wsVal) : '';
-  }
-
-  const mkLink = (url, label) => url ? `<a href="${url}" target="_blank" style="color:#818cf8;font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;">${label}</a>` : '<span style="color:var(--muted)">—</span>';
-  document.getElementById('ig-cell-' + i).innerHTML = mkLink(row.instagram, '→ Instagram');
-  document.getElementById('tg-cell-' + i).innerHTML = mkLink(row.telegram, '→ Telegram');
-  document.getElementById('ws-cell-' + i).innerHTML = row.website ? mkLink(row.website, row.website.replace(/https?:\/\//, '').slice(0, 25)) : '<span style="color:var(--muted)">—</span>';
-  showToast('✓ Сохранено');
 }
 
 function downloadExcel() {
@@ -1595,93 +1523,46 @@ function setGsStatus(msg, type='') {
 function gsLogin() {
   const clientId = document.getElementById('gClientId').value.trim();
   if (!clientId) { alert('Введите Google Client ID!'); return; }
-
-  const redirectUri = window.location.href.split('?')[0].split('#')[0];
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: redirectUri,
+    redirect_uri: window.location.href.split('?')[0].split('#')[0],
     response_type: 'token',
     scope: 'https://www.googleapis.com/auth/spreadsheets',
     prompt: 'select_account',
   });
-
-  // Open popup instead of redirecting — keeps main page data intact
-  const w = 500, h = 600;
-  const left = Math.round(screen.width / 2 - w / 2);
-  const top  = Math.round(screen.height / 2 - h / 2);
-  const popup = window.open(
-    'https://accounts.google.com/o/oauth2/v2/auth?' + params,
-    'gs_oauth',
-    `width=${w},height=${h},left=${left},top=${top},toolbar=0,menubar=0,location=0`
-  );
-  if (!popup) {
-    // Fallback: popup blocked — use redirect
-    window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
-    return;
-  }
-
-  // Poll popup until it redirects back with token in hash
-  const poll = setInterval(() => {
-    try {
-      if (!popup || popup.closed) { clearInterval(poll); return; }
-      const hash = popup.location.hash;
-      if (hash && hash.includes('access_token')) {
-        clearInterval(poll);
-        popup.close();
-        const p = new URLSearchParams(hash.substring(1));
-        const token = p.get('access_token');
-        const expiresIn = parseInt(p.get('expires_in') || '3600');
-        if (token) {
-          gsAccessToken = token;
-          const expiresAt = Date.now() + expiresIn * 1000;
-          localStorage.setItem(GS_TOKEN_KEY, token);
-          localStorage.setItem(GS_TOKEN_KEY + '_exp', expiresAt);
-          const minsLeft = Math.round(expiresIn / 60);
-          setGsStatus(`✓ Подключено (осталось ~${minsLeft} мин)`, 'connected');
-          document.getElementById('btnGsLogin').style.display = 'none';
-          document.getElementById('btnGsLogout').style.display = '';
-          showToast('✅ Google Sheets подключён — данные сбора сохранены!');
-          startGsTokenWatcher();
-        }
-      }
-    } catch(e) {
-      // Cross-origin — popup is on Google page, keep polling
-    }
-  }, 300);
+  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
 }
 
 function gsLogout() {
   gsAccessToken = null;
   localStorage.removeItem(GS_TOKEN_KEY);
-  localStorage.removeItem(GS_TOKEN_KEY + '_exp');
   setGsStatus('Не подключено');
   document.getElementById('btnGsLogin').style.display = '';
   document.getElementById('btnGsLogout').style.display = 'none';
 }
 
-function gsHandleAuthError() {
-  gsAccessToken = null;
-  localStorage.removeItem(GS_TOKEN_KEY);
-  localStorage.removeItem(GS_TOKEN_KEY + '_exp');
-  setGsStatus('⚠ Токен истёк — войдите снова', 'error');
-  document.getElementById('btnGsLogin').style.display = '';
-  document.getElementById('btnGsLogout').style.display = 'none';
-}
-
 function checkGsToken() {
-  // Check saved token — verify it hasn't expired
-  const saved = localStorage.getItem(GS_TOKEN_KEY);
-  const exp   = parseInt(localStorage.getItem(GS_TOKEN_KEY + '_exp') || '0');
-  if (saved) {
-    if (exp && Date.now() > exp - 60000) {
-      localStorage.removeItem(GS_TOKEN_KEY);
-      localStorage.removeItem(GS_TOKEN_KEY + '_exp');
-      setGsStatus('⚠ Токен истёк — нажмите «Войти через Google»', 'error');
+  // Check URL hash for token (after OAuth redirect)
+  const hash = window.location.hash;
+  if (hash && hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.substring(1));
+    const token = params.get('access_token');
+    if (token) {
+      gsAccessToken = token;
+      localStorage.setItem(GS_TOKEN_KEY, token);
+      window.history.replaceState(null, '', window.location.pathname);
+      setGsStatus('✓ Подключено к Google', 'connected');
+      document.getElementById('btnGsLogin').style.display = 'none';
+      document.getElementById('btnGsLogout').style.display = '';
+      showToast('Google Sheets подключён!');
       return;
     }
+  }
+  // Check saved token
+  const saved = localStorage.getItem(GS_TOKEN_KEY);
+  if (saved) {
     gsAccessToken = saved;
-    const minsLeft = exp ? Math.round((exp - Date.now()) / 60000) : '?';
-    setGsStatus(`✓ Подключено (осталось ~${minsLeft} мин)`, 'connected');
+    setGsStatus('✓ Подключено (токен из памяти)', 'connected');
     document.getElementById('btnGsLogin').style.display = 'none';
     document.getElementById('btnGsLogout').style.display = '';
   }
@@ -1715,16 +1596,12 @@ async function pushToSheets() {
 
   try {
     // 1. Read existing sheet to get all Instagram usernames and last row
-    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A:J`;
+    const readUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A:L`;
     const readRes = await fetch(readUrl, {
       headers: { Authorization: 'Bearer ' + gsAccessToken }
     });
     if (!readRes.ok) {
       const err = await readRes.json();
-      if (readRes.status === 401) {
-        gsHandleAuthError();
-        throw new Error('Токен Google истёк. Нажмите «Войти через Google» снова.');
-      }
       throw new Error(err.error?.message || 'Ошибка чтения таблицы');
     }
     const readData = await readRes.json();
@@ -1743,33 +1620,29 @@ async function pushToSheets() {
       const tgUser = extractTgUsername(tgUrl);
       if (igUser) existingIg.add(igUser);
       if (tgUser) existingTg.add(tgUser);
-      if (siteUrl) existingSites.add(siteUrl.trim().toLowerCase().replace(/\/+$/, ''));
+      if (siteUrl) existingSites.add(siteUrl.trim().toLowerCase());
     }
 
-    // 2. Filter new rows — skip if Instagram, Telegram or website already exists
+    // 2. Filter new rows — skip if Instagram already exists
     const newRows = [];
     for (const row of collectedData) {
-      const igUser  = extractIgUsername(row.instagram);
-      const tgUser  = extractTgUsername(row.telegram);
-      const siteNorm = row.website ? row.website.trim().toLowerCase().replace(/\/+$/, '') : '';
+      const igUser = extractIgUsername(row.instagram);
+      const tgUser = extractTgUsername(row.telegram);
 
-      // Skip if any contact already in table
-      if (igUser   && existingIg.has(igUser))     continue;
-      if (tgUser   && existingTg.has(tgUser))     continue;
-      if (siteNorm && existingSites.has(siteNorm)) continue;
+      // Skip if Instagram already in table (primary dedup key)
+      if (igUser && existingIg.has(igUser)) continue;
       // Skip if no contacts at all
       if (!row.instagram && !row.telegram && !row.website) continue;
 
       newRows.push(row);
       // Add to sets so duplicates within new batch are also caught
-      if (igUser)   existingIg.add(igUser);
-      if (tgUser)   existingTg.add(tgUser);
-      if (siteNorm) existingSites.add(siteNorm);
+      if (igUser) existingIg.add(igUser);
+      if (tgUser) existingTg.add(tgUser);
     }
 
     if (!newRows.length) {
       resultEl.className = 'push-result visible';
-      resultEl.textContent = '✓ Нет новых данных — все контакты уже есть в таблице';
+      resultEl.textContent = '✓ Нет новых данных — все Instagram уже есть в таблице';
       btn.disabled = false;
       btn.textContent = '📤 Добавить новые данные в таблицу';
       return;
@@ -1778,27 +1651,29 @@ async function pushToSheets() {
     btn.textContent = `⏳ Добавляем ${newRows.length} строк...`;
 
     // 3. Build rows to append: empty row separator + new data rows
-    // Columns: A=Telegram, B=Цена, C=Раздел, D=Себе, E=Название, F=Instagram, G=, H=, I=Источник, J=Сайт
+    // Columns: A=Telegram, B=Цена, C=Раздел, D=Себе, E=Название, F=Instagram, G=, H=, I=Источник, J=Сайт, K=Дата объявления, L=Ссылка на объявление
     const toAppend = [
-      Array(10).fill(''), // empty separator row
+      Array(12).fill(''), // empty separator row
     ];
     for (const row of newRows) {
       toAppend.push([
-        row.telegram  || '',  // A - Telegram
-        '',                    // B - Цена (пусто)
-        '',                    // C - Раздел (пусто)
-        '',                    // D - Себе (пусто)
-        row.page_name || '',  // E - Название
-        row.instagram || '',  // F - Instagram
-        '',                    // G - Отказали/Сотрудничаем
-        '',                    // H - Связывались
-        '',                    // I - Источник (пусто)
-        row.website   || '',  // J - Сайт
+        row.telegram      || '',  // A - Telegram
+        '',                        // B - Цена (пусто)
+        '',                        // C - Раздел (пусто)
+        '',                        // D - Себе (пусто)
+        row.page_name     || '',  // E - Название
+        row.instagram     || '',  // F - Instagram
+        '',                        // G - Отказали/Сотрудничаем
+        '',                        // H - Связывались
+        '',                        // I - Источник (пусто)
+        row.website       || '',  // J - Сайт
+        row.start_date    || '',  // K - Дата объявления
+        row.snapshot_url  || '',  // L - Ссылка на объявление
       ]);
     }
 
     // 4. Append values
-    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A${lastRow + 1}:J${lastRow + toAppend.length}?valueInputOption=USER_ENTERED`;
+    const appendUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(sheetName)}!A${lastRow + 1}:L${lastRow + toAppend.length}?valueInputOption=USER_ENTERED`;
     const appendRes = await fetch(appendUrl, {
       method: 'PUT',
       headers: {
@@ -1840,7 +1715,7 @@ async function pushToSheets() {
               startRowIndex: dataStartRow - 1,
               endRowIndex: dataEndRow,
               startColumnIndex: 0,
-              endColumnIndex: 10,
+              endColumnIndex: 12,
             },
             cell: {
               userEnteredFormat: {
@@ -1989,33 +1864,11 @@ async function getLongLivedToken() {
   }
 }
 
-// ====== AUTO REFRESH TIMER — предупреждает за 5 мин до истечения токена Google ======
-function startGsTokenWatcher() {
-  clearInterval(window._gsTokenWatcher);
-  window._gsTokenWatcher = setInterval(() => {
-    const exp = parseInt(localStorage.getItem(GS_TOKEN_KEY + '_exp') || '0');
-    if (!exp || !gsAccessToken) return;
-    const msLeft = exp - Date.now();
-    if (msLeft <= 0) {
-      gsHandleAuthError();
-      clearInterval(window._gsTokenWatcher);
-    } else if (msLeft <= 5 * 60 * 1000) {
-      // Less than 5 min left — show warning in status
-      const minsLeft = Math.round(msLeft / 60000);
-      setGsStatus(`⚠ Токен истекает через ~${minsLeft} мин — обновите`, 'error');
-    } else {
-      const minsLeft = Math.round(msLeft / 60000);
-      setGsStatus(`✓ Подключено (осталось ~${minsLeft} мин)`, 'connected');
-    }
-  }, 30000); // check every 30 sec
-}
-
 // ====== INIT (runs after all functions are defined) ======
 loadSettings();
 loadGsSettings();
 loadLltSettings();
 checkGsToken();
-startGsTokenWatcher();
 checkResumeState();
 
 // Load saved token
