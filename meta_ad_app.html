@@ -1593,14 +1593,58 @@ function setGsStatus(msg, type='') {
 function gsLogin() {
   const clientId = document.getElementById('gClientId').value.trim();
   if (!clientId) { alert('Введите Google Client ID!'); return; }
+
+  // Use a minimal redirect page hosted on the same origin (or a data: URI trick)
+  // We open a popup and poll for the token in the hash
+  const redirectUri = window.location.href.split('?')[0].split('#')[0];
   const params = new URLSearchParams({
     client_id: clientId,
-    redirect_uri: window.location.href.split('?')[0].split('#')[0],
+    redirect_uri: redirectUri,
     response_type: 'token',
     scope: 'https://www.googleapis.com/auth/spreadsheets',
     prompt: 'select_account',
   });
-  window.location.href = 'https://accounts.google.com/o/oauth2/v2/auth?' + params;
+
+  const popup = window.open(
+    'https://accounts.google.com/o/oauth2/v2/auth?' + params,
+    'google_oauth',
+    'width=520,height=620,left=' + Math.round((screen.width-520)/2) + ',top=' + Math.round((screen.height-620)/2)
+  );
+
+  if (!popup) {
+    alert('Браузер заблокировал всплывающее окно. Разрешите popup для этого сайта и попробуйте снова.');
+    return;
+  }
+
+  setGsStatus('Ожидаем авторизацию...', '');
+
+  const timer = setInterval(() => {
+    try {
+      const hash = popup.location.hash;
+      if (hash && hash.includes('access_token')) {
+        const tokenParams = new URLSearchParams(hash.substring(1));
+        const token = tokenParams.get('access_token');
+        if (token) {
+          clearInterval(timer);
+          popup.close();
+          gsAccessToken = token;
+          localStorage.setItem(GS_TOKEN_KEY, token);
+          setGsStatus('✓ Подключено к Google', 'connected');
+          document.getElementById('btnGsLogin').style.display = 'none';
+          document.getElementById('btnGsLogout').style.display = '';
+          showToast('Google Sheets подключён!');
+        }
+      }
+    } catch(e) {
+      // Cross-origin — popup is on Google's domain, just wait
+    }
+    if (popup.closed) {
+      clearInterval(timer);
+      // Check if token was saved (popup closed after redirect back)
+      const saved = localStorage.getItem(GS_TOKEN_KEY);
+      if (!saved) setGsStatus('Авторизация отменена', '');
+    }
+  }, 500);
 }
 
 function gsLogout() {
