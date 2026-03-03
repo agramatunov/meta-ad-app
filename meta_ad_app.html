@@ -1029,6 +1029,8 @@ function waitIfPaused() {
   if (!_isPaused) return Promise.resolve();
   return new Promise(resolve => { _pauseResolve = resolve; });
 }
+
+function checkResumeState() {
   try {
     const raw = localStorage.getItem(RESUME_KEY);
     if (!raw) return;
