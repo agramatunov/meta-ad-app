@@ -696,6 +696,21 @@ tr:hover td { background:rgba(79,110,247,.04); }
 
 </div>
 <script>
+// ====== POPUP OAUTH HANDLER ======
+// If this page is opened as a popup after Google OAuth redirect — extract token and notify parent
+(function() {
+  try {
+    if (window.opener && window.location.hash && window.location.hash.includes('access_token')) {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const token = params.get('access_token');
+      if (token) {
+        window.opener.postMessage({ type: 'gs_oauth_token', token: token }, '*');
+        window.close();
+      }
+    }
+  } catch(e) {}
+})();
+
 let keywords = ['instagram.com'];
 
 // ---- Settings persistence ----
@@ -1594,8 +1609,6 @@ function gsLogin() {
   const clientId = document.getElementById('gClientId').value.trim();
   if (!clientId) { alert('Введите Google Client ID!'); return; }
 
-  // Use a minimal redirect page hosted on the same origin (or a data: URI trick)
-  // We open a popup and poll for the token in the hash
   const redirectUri = window.location.href.split('?')[0].split('#')[0];
   const params = new URLSearchParams({
     client_id: clientId,
@@ -1618,33 +1631,30 @@ function gsLogin() {
 
   setGsStatus('Ожидаем авторизацию...', '');
 
-  const timer = setInterval(() => {
-    try {
-      const hash = popup.location.hash;
-      if (hash && hash.includes('access_token')) {
-        const tokenParams = new URLSearchParams(hash.substring(1));
-        const token = tokenParams.get('access_token');
-        if (token) {
-          clearInterval(timer);
-          popup.close();
-          gsAccessToken = token;
-          localStorage.setItem(GS_TOKEN_KEY, token);
-          setGsStatus('✓ Подключено к Google', 'connected');
-          document.getElementById('btnGsLogin').style.display = 'none';
-          document.getElementById('btnGsLogout').style.display = '';
-          showToast('Google Sheets подключён!');
-        }
-      }
-    } catch(e) {
-      // Cross-origin — popup is on Google's domain, just wait
+  // Listen for postMessage from the popup (sent by our own page when it reopens with token in hash)
+  function onMessage(e) {
+    if (e.data && e.data.type === 'gs_oauth_token' && e.data.token) {
+      window.removeEventListener('message', onMessage);
+      gsAccessToken = e.data.token;
+      localStorage.setItem(GS_TOKEN_KEY, e.data.token);
+      setGsStatus('✓ Подключено к Google', 'connected');
+      document.getElementById('btnGsLogin').style.display = 'none';
+      document.getElementById('btnGsLogout').style.display = '';
+      showToast('Google Sheets подключён!');
     }
+  }
+  window.addEventListener('message', onMessage);
+
+  // Fallback: if popup is closed without token
+  const closedTimer = setInterval(() => {
     if (popup.closed) {
-      clearInterval(timer);
-      // Check if token was saved (popup closed after redirect back)
+      clearInterval(closedTimer);
+      window.removeEventListener('message', onMessage);
       const saved = localStorage.getItem(GS_TOKEN_KEY);
-      if (!saved) setGsStatus('Авторизация отменена', '');
+      if (!saved || gsAccessToken) return;
+      setGsStatus('Авторизация отменена', '');
     }
-  }, 500);
+  }, 800);
 }
 
 function gsLogout() {
