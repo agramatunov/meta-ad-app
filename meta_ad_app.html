@@ -1099,6 +1099,8 @@ async function fetchPageContacts(token, pageId) {
 // ============================================================
 // 🔍 CHECK ADS COUNT — быстрая проверка кол-ва объявлений
 // ============================================================
+let _countAbort = false;
+
 async function checkAdsCount() {
   const token = document.getElementById('token').value.trim();
   if (!token) { alert('Введите Access Token!'); return; }
@@ -1106,13 +1108,25 @@ async function checkAdsCount() {
 
   const btn = document.getElementById('btnCheckCount');
   const resultEl = document.getElementById('countResult');
-  btn.disabled = true;
-  btn.textContent = '⏳ Проверяем...';
+
+  // If already counting — stop
+  if (btn.dataset.counting === '1') {
+    _countAbort = true;
+    btn.dataset.counting = '0';
+    btn.textContent = '🔍 Проверить кол-во';
+    btn.disabled = false;
+    return;
+  }
+
+  _countAbort = false;
+  btn.dataset.counting = '1';
+  btn.textContent = '⏹ Остановить';
+  btn.disabled = false;
   resultEl.style.display = 'block';
   resultEl.style.background = 'rgba(79,110,247,.07)';
   resultEl.style.borderColor = 'rgba(79,110,247,.2)';
   resultEl.style.color = '#818cf8';
-  resultEl.textContent = '⏳ Делаем пробный запрос к API...';
+  resultEl.textContent = '⏳ Считаем...';
 
   const country  = document.getElementById('country').value;
   const platform = document.getElementById('platform').value;
@@ -1122,38 +1136,54 @@ async function checkAdsCount() {
   const dateTo   = document.getElementById('dateTo').value;
 
   try {
-    let totalPages = 0;
-    let totalAds = 0;
     const results = [];
+    let grandTotal = 0;
 
     for (const term of keywords) {
-      // Fetch first page only (limit=500 max per page)
-      const data = await fetchPage(token, term, country, status, media, platform, dateFrom, dateTo, null);
-      if (data.error) {
-        resultEl.style.background = 'rgba(239,68,68,.07)';
-        resultEl.style.borderColor = 'rgba(239,68,68,.2)';
-        resultEl.style.color = '#fca5a5';
-        resultEl.textContent = `❌ API ошибка: ${data.error.message}`;
-        btn.disabled = false;
-        btn.textContent = '🔍 Проверить кол-во';
-        return;
+      let cursor = null;
+      let termTotal = 0;
+      let pageNum = 0;
+
+      while (true) {
+        if (_countAbort) break;
+        pageNum++;
+        resultEl.innerHTML = `⏳ Считаем... <strong style="color:#818cf8">"${term}"</strong>: уже ${termTotal.toLocaleString()} объявлений (стр. ${pageNum})`;
+
+        const data = await fetchPage(token, term, country, status, media, platform, dateFrom, dateTo, cursor);
+
+        if (data.error) {
+          resultEl.style.background = 'rgba(239,68,68,.07)';
+          resultEl.style.borderColor = 'rgba(239,68,68,.2)';
+          resultEl.style.color = '#fca5a5';
+          resultEl.textContent = `❌ API ошибка: ${data.error.message}`;
+          btn.dataset.counting = '0';
+          btn.textContent = '🔍 Проверить кол-во';
+          return;
+        }
+
+        const ads = data.data || [];
+        termTotal += ads.length;
+        const nextCursor = data.paging?.cursors?.after;
+        if (!nextCursor || ads.length === 0) break;
+        cursor = nextCursor;
+        await new Promise(r => setTimeout(r, 300));
       }
-      const count = (data.data || []).length;
-      const hasMore = !!(data.paging?.cursors?.after && count > 0);
-      results.push({ term, count, hasMore });
-      totalAds += count;
+
+      results.push({ term, count: termTotal, stopped: _countAbort });
+      grandTotal += termTotal;
+      if (_countAbort) break;
     }
 
-    const parts = results.map(r =>
-      `"${r.term}": ${r.count}${r.hasMore ? '+' : ''} объявлений`
-    );
-    const totalHasMore = results.some(r => r.hasMore);
+    const parts = results.map(r => `"${r.term}": <strong>${r.count.toLocaleString()}</strong>${r.stopped ? '+' : ''}`);
+    const wasStopped = results.some(r => r.stopped);
 
     resultEl.style.background = 'rgba(34,197,94,.07)';
     resultEl.style.borderColor = 'rgba(34,197,94,.2)';
     resultEl.style.color = '#86efac';
-    resultEl.innerHTML = `✅ На первой странице найдено: <strong style="color:#4ade80">${totalAds}${totalHasMore ? '+' : ''} объявлений</strong><br>` +
-      `<span style="color:var(--muted);font-size:11px">${parts.join(' · ')}${totalHasMore ? ' · Это только первая страница (500), реальных объявлений значительно больше' : ''}</span>`;
+    resultEl.innerHTML =
+      `✅ Всего найдено: <strong style="color:#4ade80">${grandTotal.toLocaleString()}${wasStopped ? '+' : ''} объявлений</strong><br>` +
+      `<span style="color:var(--muted);font-size:11px">${parts.join(' · ')}${wasStopped ? ' · Подсчёт был остановлен вручную' : ''}</span>`;
+
   } catch(e) {
     resultEl.style.background = 'rgba(239,68,68,.07)';
     resultEl.style.borderColor = 'rgba(239,68,68,.2)';
@@ -1161,7 +1191,7 @@ async function checkAdsCount() {
     resultEl.textContent = `❌ Ошибка сети: ${e.message}`;
   }
 
-  btn.disabled = false;
+  btn.dataset.counting = '0';
   btn.textContent = '🔍 Проверить кол-во';
 }
 
