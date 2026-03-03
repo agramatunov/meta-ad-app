@@ -185,6 +185,12 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter:invert(.5); curso
   color:#86efac;
 }
 .btn-pause.paused:hover { background:rgba(34,197,94,.22); }
+.btn-stop {
+  width:100%; background:rgba(239,68,68,.12); border:1px solid rgba(239,68,68,.35);
+  color:#fca5a5; font-family:'Syne',sans-serif; font-size:14px; font-weight:700;
+  padding:13px; border-radius:14px; cursor:pointer; margin-top:8px; display:none; transition:all .3s;
+}
+.btn-stop:hover { background:rgba(239,68,68,.22); transform:translateY(-1px); }
 .resume-banner {
   display:none; background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.3);
   border-radius:12px; padding:14px 18px; margin-top:10px;
@@ -597,6 +603,9 @@ tr:hover td { background:rgba(79,110,247,.04); }
   <button class="btn-pause" id="btnPauseToggle" onclick="togglePause()">
     ⏸ Приостановить сбор
   </button>
+  <button class="btn-stop" id="btnStop" onclick="stopCollection()">
+    ⏹ Завершить сбор
+  </button>
   <div class="resume-banner" id="resumeBanner"></div>
   <button class="btn-resume" id="btnResume" onclick="runCollection(true)">
     ▶ Продолжить с места остановки
@@ -815,7 +824,7 @@ function addLiveRows(ads) {
     const titles = ad.ad_creative_link_titles||[];
     const text = [...bodies,...titles].join(' ').slice(0,80);
     const plats = (ad.publisher_platforms||[]).join(', ');
-    const start = (ad.ad_delivery_start_time||'').slice(0,10);
+    const start = formatDate(ad.ad_delivery_start_time||'');
     const url = ad.ad_snapshot_url||'';
     const tr = document.createElement('tr');
     tr.className = 'new-row';
@@ -1008,6 +1017,7 @@ function clearResumeState() {
 // ============================================================
 let _isPaused = false;
 let _pauseResolve = null;
+let _isStopped = false;
 
 function togglePause() {
   const btn = document.getElementById('btnPauseToggle');
@@ -1023,6 +1033,18 @@ function togglePause() {
     log('▶ Сбор возобновлён', 'info');
     if (_pauseResolve) { _pauseResolve(); _pauseResolve = null; }
   }
+}
+
+function stopCollection() {
+  _isStopped = true;
+  if (_isPaused) {
+    _isPaused = false;
+    if (_pauseResolve) { _pauseResolve(); _pauseResolve = null; }
+  }
+  log('⏹ Завершение сбора — обрабатываем собранные данные...', 'warn');
+  document.getElementById('btnStop').style.display = 'none';
+  document.getElementById('btnPauseToggle').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'none';
 }
 
 function waitIfPaused() {
@@ -1046,6 +1068,13 @@ function checkResumeState() {
     banner.classList.add('visible');
     document.getElementById('btnResume').style.display = 'block';
   } catch(e) { clearResumeState(); }
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = iso.slice(0,10).split('-');
+  if (d.length !== 3) return iso.slice(0,10);
+  return `${d[2]}.${d[1]}.${d[0]}`;
 }
 
 async function fetchPage(token,term,country,status,media,platform,dateFrom,dateTo,cursor) {
@@ -1241,10 +1270,12 @@ async function runCollection(isResume = false) {
   initLiveFeed();
   window._rateLimitRetries = 0;
   _isPaused = false;
+  _isStopped = false;
   const pauseBtn = document.getElementById('btnPauseToggle');
   pauseBtn.style.display = 'block';
   pauseBtn.textContent = '⏸ Приостановить сбор';
   pauseBtn.classList.remove('paused');
+  document.getElementById('btnStop').style.display = 'block';
 
   log('Запуск сбора...','info');
   log(`Страна: ${country} | Статус: ${status} | Медиа: ${media}`,'info');
@@ -1262,6 +1293,7 @@ async function runCollection(isResume = false) {
 
       // Ждём если пользователь нажал паузу
       await waitIfPaused();
+      if (_isStopped) break;
 
       const limitStr = maxAds ? ` / лимит ${maxAds}` : '';
       log(`  Стр.${pageNum} · собрано: ${allAds.length}${limitStr}`);
@@ -1279,6 +1311,7 @@ async function runCollection(isResume = false) {
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
           document.getElementById('btnPauseToggle').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'none';
           return;
         }
       }
@@ -1305,6 +1338,7 @@ async function runCollection(isResume = false) {
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
           document.getElementById('btnPauseToggle').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'none';
           return;
         } else if (isPermError) {
           document.getElementById('tokenHintBox').classList.add('visible');
@@ -1315,6 +1349,7 @@ async function runCollection(isResume = false) {
           checkResumeState();
           document.getElementById('btnRun').disabled = false;
           document.getElementById('btnPauseToggle').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'none';
           return;
         } else if (isRateLimit) {
           const pauseSec = parseInt(document.getElementById('rateLimitPause')?.value) || 300;
@@ -1360,8 +1395,8 @@ async function runCollection(isResume = false) {
           resumeSeen[pid] = {
             page_id:pid, page_name:ad.page_name||'—',
             platforms:(ad.publisher_platforms||[]).join(', '),
-            start_date:(ad.ad_delivery_start_time||'').slice(0,10),
-            stop_date:(ad.ad_delivery_stop_time||'').slice(0,10),
+            start_date:formatDate(ad.ad_delivery_start_time||''),
+            stop_date:formatDate(ad.ad_delivery_stop_time||''),
             text:text.slice(0,200)+(text.length>200?'...':''),
             snapshot_url:ad.ad_snapshot_url||'',
             impressions:imp.lower_bound?`${imp.lower_bound}–${imp.upper_bound}`:'—',
@@ -1392,6 +1427,7 @@ async function runCollection(isResume = false) {
     }
     log(`  Найдено: ${allAds.length}`,'success');
     isResume = false; // для следующих ключевых слов начинаем с нуля
+    if (_isStopped) break;
   }
 
   totalRaw = allAds.length;
@@ -1431,6 +1467,7 @@ async function runCollection(isResume = false) {
     }
     document.getElementById('btnRun').disabled=false;
   document.getElementById('btnPauseToggle').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'none';
   return;
   }
   log(`✅ Рекламодателей: ${collectedData.length}`,'success');
@@ -1487,6 +1524,7 @@ async function runCollection(isResume = false) {
   document.getElementById('results').classList.add('active');
   document.getElementById('btnRun').disabled=false;
   document.getElementById('btnPauseToggle').style.display = 'none';
+  document.getElementById('btnStop').style.display = 'none';
   document.getElementById('btnPush').disabled = false;
 }
 
