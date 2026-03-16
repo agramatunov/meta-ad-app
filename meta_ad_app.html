@@ -972,7 +972,7 @@ function matchesLanguage(text, lang) {
   if (!text) return false;
   const cyrCount = (text.match(/[а-яёА-ЯЁіїєІЇЄ]/g)||[]).length;
   const latinCount = (text.match(/[a-zA-Z]/g)||[]).length;
-  if (lang==='cyrillic') return cyrCount > 10 && cyrCount > latinCount * 0.3;
+  if (lang==='cyrillic') return cyrCount > 15 && cyrCount > latinCount * 0.5;
   if (lang==='ru') return (text.match(/[а-яёА-ЯЁ]/g)||[]).length > 10;
   if (lang==='uk') return (text.match(/[іїєІЇЄ]/g)||[]).length > 3;
   if (lang==='pl') return (text.match(/[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/g)||[]).length > 3;
@@ -1401,7 +1401,7 @@ async function runCollection(isResume = false) {
         const bodies = ad.ad_creative_bodies||[];
         const titles = ad.ad_creative_link_titles||[];
         const text = [...bodies,...titles].join(' ');
-        if (lang && !text.trim()) continue;
+        if (lang && !text.trim()) { allAds.splice(allAds.length - 1, 1); continue; }
         if (!matchesLanguage(text,lang)) continue;
         const pid = ad.page_id||ad.id;
         const contacts = extractContacts(ad, text);
