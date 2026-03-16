@@ -1400,9 +1400,11 @@ async function runCollection(isResume = false) {
       for (const ad of ads) {
         const bodies = ad.ad_creative_bodies||[];
         const titles = ad.ad_creative_link_titles||[];
-        const text = [...bodies,...titles].join(' ');
-        if (lang && !text.trim()) { allAds.splice(allAds.length - 1, 1); continue; }
-        if (!matchesLanguage(text,lang)) continue;
+        const captions = ad.ad_creative_link_captions||[];
+        const descs = ad.ad_creative_link_descriptions||[];
+        const text = [...bodies,...titles,...captions,...descs].join(' ');
+        if (lang && !text.trim()) continue;
+        if (lang && !matchesLanguage(text,lang)) continue;
         const pid = ad.page_id||ad.id;
         const contacts = extractContacts(ad, text);
         const imp = ad.impressions||{}, spd = ad.spend||{};
