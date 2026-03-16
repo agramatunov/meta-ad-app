@@ -527,6 +527,30 @@ tr:hover td { background:rgba(79,110,247,.04); }
     </div>
   </div>
 
+  <div class="section-label">Фильтр по локации Facebook-страницы</div>
+  <div style="margin-bottom:20px">
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <h4>Фильтровать по стране страницы</h4>
+        <p>Второй проход проверит поле location каждой Facebook-страницы через API и оставит только совпадающие со страной таргетинга</p>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="filterByLocation" onchange="saveSettings()">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <h4>Оставлять если локация не указана</h4>
+        <p>Многие страницы не заполняют location (~40–60%). Включи чтобы не терять таких рекламодателей</p>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="keepNoLocation" checked onchange="saveSettings()">
+        <span class="slider"></span>
+      </label>
+    </div>
+  </div>
+
   <div class="section-label">Статус объявления</div>
   <div class="grid-2" style="margin-bottom:20px">
     <div class="field" style="margin:0">
@@ -736,6 +760,8 @@ function saveSettings() {
     platform:    document.getElementById('platform').value,
     mediaType:   document.getElementById('mediaType').value,
     adStatus:    document.getElementById('adStatus').value,
+    filterByLocation: document.getElementById('filterByLocation').checked,
+    keepNoLocation:   document.getElementById('keepNoLocation').checked,
     maxAds:      document.getElementById('maxAds').value,
     dateFrom:    document.getElementById('dateFrom').value,
     dateTo:      document.getElementById('dateTo').value,
@@ -753,6 +779,8 @@ function loadSettings() {
   document.getElementById('platform').value   = s.platform   ?? d.platform;
   document.getElementById('mediaType').value  = s.mediaType  ?? d.mediaType;
   document.getElementById('adStatus').value   = s.adStatus   ?? d.adStatus;
+  document.getElementById('filterByLocation').checked = s.filterByLocation ?? false;
+  document.getElementById('keepNoLocation').checked   = s.keepNoLocation   ?? true;
   document.getElementById('maxAds').value     = s.maxAds     ?? d.maxAds;
   document.getElementById('dateFrom').value   = s.dateFrom   ?? d.dateFrom;
   document.getElementById('dateTo').value     = s.dateTo     ?? d.dateTo;
@@ -769,6 +797,8 @@ function resetSettings() {
   document.getElementById('platform').value   = d.platform;
   document.getElementById('mediaType').value  = d.mediaType;
   document.getElementById('adStatus').value   = d.adStatus;
+  document.getElementById('filterByLocation').checked = false;
+  document.getElementById('keepNoLocation').checked   = true;
   document.getElementById('maxAds').value     = d.maxAds;
   document.getElementById('dateFrom').value   = d.dateFrom;
   document.getElementById('dateTo').value     = d.dateTo;
@@ -1113,7 +1143,7 @@ async function fetchPageContacts(token, pageId) {
   try {
     const p = new URLSearchParams({
       access_token: token,
-      fields: 'website,link,instagram_business_account{username},connected_instagram_account{username}',
+      fields: 'website,link,instagram_business_account{username},connected_instagram_account{username},location',
     });
     const r = await fetch(`https://graph.facebook.com/v19.0/${pageId}?${p}`);
     const data = await r.json();
@@ -1134,6 +1164,7 @@ async function fetchPageContacts(token, pageId) {
     const igAcc = data.instagram_business_account || data.connected_instagram_account;
     if (igAcc && igAcc.username) result.instagram = 'https://instagram.com/' + igAcc.username;
 
+    if (data.location && data.location.country) result.location_country = data.location.country.toUpperCase();
     return result;
   } catch(e) {
     return {};
@@ -1454,11 +1485,18 @@ async function runCollection(isResume = false) {
   setProgress(100);
   clearResumeState(); // успешно завершили — очищаем сохранённый прогресс
 
-  // ---- Second pass: enrich with Facebook page contacts ----
+  // ---- Second pass: enrich with Facebook page contacts + location filter ----
   if (collectedData.length > 0) {
-    log(`🔍 Второй проход: обогащение контактами из Facebook-страниц (${collectedData.length} страниц)...`, 'info');
+    const filterByLoc   = document.getElementById('filterByLocation').checked;
+    const keepNoLoc     = document.getElementById('keepNoLocation').checked;
+    const targetCountry = document.getElementById('country').value.toUpperCase();
+    const logLoc = filterByLoc
+      ? `🔍 Второй проход: обогащение + фильтр по стране "${targetCountry}" (${collectedData.length} страниц)...`
+      : `🔍 Второй проход: обогащение контактами из Facebook-страниц (${collectedData.length} страниц)...`;
+    log(logLoc, 'info');
     setProgress(92);
     let enriched = 0;
+    let removedByLocation = 0;
     const batchSize = 10;
     for (let i = 0; i < collectedData.length; i += batchSize) {
       const batch = collectedData.slice(i, i + batchSize);
@@ -1468,9 +1506,21 @@ async function runCollection(isResume = false) {
         if (extra.instagram && !row.instagram) { row.instagram = extra.instagram; enriched++; }
         if (extra.telegram && !row.telegram) { row.telegram = extra.telegram; enriched++; }
         if (extra.website && !row.website) { row.website = extra.website; enriched++; }
+        // Store location country on row for filtering
+        if (extra.location_country) row.location_country = extra.location_country;
       }));
       setProgress(92 + Math.round((i / collectedData.length) * 6));
       await new Promise(r => setTimeout(r, 150));
+    }
+    // Apply location filter
+    if (filterByLoc) {
+      const before = collectedData.length;
+      collectedData = collectedData.filter(row => {
+        if (!row.location_country) return keepNoLoc; // no location — keep or drop
+        return row.location_country === targetCountry;
+      });
+      removedByLocation = before - collectedData.length;
+      log(`🌍 Фильтр локации: оставлено ${collectedData.length} из ${before} (удалено ${removedByLocation} не из ${targetCountry})`, 'info');
     }
     log(`✅ Обогащено контактов: +${enriched} из Facebook-страниц`, 'success');
   }
@@ -1552,8 +1602,8 @@ function downloadExcel() {
   const dateFrom=document.getElementById('dateFrom').value, dateTo=document.getElementById('dateTo').value;
 
   const wb = XLSX.utils.book_new();
-  const wsData = [['№','Название страницы','Платформы','Дата начала','Дата окончания','Instagram','Telegram','Сайт','Facebook','Объявление','Охват','Расходы','Объявлений','Текст','ID']];
-  collectedData.forEach((r,i)=>wsData.push([i+1,r.page_name,r.platforms,r.start_date,r.stop_date,r.instagram||'',r.telegram||'',r.website||'',r.fb_page||'',r.snapshot_url,r.impressions,r.spend,r.ad_count,r.text,r.page_id]));
+  const wsData = [['№','Название страницы','Платформы','Дата начала','Дата окончания','Instagram','Telegram','Сайт','Facebook','Объявление','Охват','Расходы','Объявлений','Текст','ID','Страна страницы']];
+  collectedData.forEach((r,i)=>wsData.push([i+1,r.page_name,r.platforms,r.start_date,r.stop_date,r.instagram||'',r.telegram||'',r.website||'',r.fb_page||'',r.snapshot_url,r.impressions,r.spend,r.ad_count,r.text,r.page_id,r.location_country||'']));
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   ws['!cols']=[{wch:5},{wch:28},{wch:16},{wch:12},{wch:12},{wch:30},{wch:28},{wch:30},{wch:30},{wch:30},{wch:18},{wch:18},{wch:10},{wch:50},{wch:18}];
   XLSX.utils.book_append_sheet(wb,ws,'Рекламодатели');
